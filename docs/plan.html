@@ -1,0 +1,529 @@
+<title>Commit Günlüğü</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --paper: #f2f3ef;
+  --paper-raised: #ffffff;
+  --ink: #1b201c;
+  --ink-soft: #4c554e;
+  --ink-faint: #838d84;
+  --line: #d7dbd2;
+  --line-strong: #b7bfb2;
+  --accent: #3a6b52;
+  --accent-ink: #f2f3ef;
+  --accent-soft: #e2ebe3;
+  --add: #2e7d46;
+  --add-bg: #e4f0e6;
+  --del: #a83c30;
+  --del-bg: #f6e6e2;
+  --amber: #a5691f;
+  --amber-bg: #f3e6d2;
+  --shadow: 0 1px 2px rgba(27,32,28,0.06), 0 8px 24px -12px rgba(27,32,28,0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14170f;
+    --paper-raised: #1c2018;
+    --ink: #e9ede4;
+    --ink-soft: #b3bcaa;
+    --ink-faint: #7c8574;
+    --line: #2c3226;
+    --line-strong: #3d4534;
+    --accent: #7dbf98;
+    --accent-ink: #0f1710;
+    --accent-soft: #202e24;
+    --add: #7dbf98;
+    --add-bg: #1c2c20;
+    --del: #d98a7a;
+    --del-bg: #2f2019;
+    --amber: #d9a862;
+    --amber-bg: #2e2515;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #14170f;
+  --paper-raised: #1c2018;
+  --ink: #e9ede4;
+  --ink-soft: #b3bcaa;
+  --ink-faint: #7c8574;
+  --line: #2c3226;
+  --line-strong: #3d4534;
+  --accent: #7dbf98;
+  --accent-ink: #0f1710;
+  --accent-soft: #202e24;
+  --add: #7dbf98;
+  --add-bg: #1c2c20;
+  --del: #d98a7a;
+  --del-bg: #2f2019;
+  --amber: #d9a862;
+  --amber-bg: #2e2515;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+.wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+h1, h2, h3 {
+  font-family: "Source Serif 4", Georgia, serif;
+  text-wrap: balance;
+  color: var(--ink);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* ---------- header ---------- */
+header.hero {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2.5rem;
+  margin-bottom: 3rem;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.1rem;
+}
+.eyebrow .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+h1.title {
+  font-size: clamp(2rem, 4.4vw, 2.9rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.9rem;
+}
+
+.dek {
+  font-size: 1.08rem;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin-bottom: 1.6rem;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+.meta-row b { color: var(--ink-soft); font-weight: 500; }
+
+/* ---------- section rhythm ---------- */
+section { margin-bottom: 3.4rem; }
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin-bottom: 1.3rem;
+}
+.section-num {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  flex-shrink: 0;
+}
+h2.section-title {
+  font-size: 1.5rem;
+}
+
+p { margin: 0 0 1rem; color: var(--ink); max-width: 68ch; }
+p:last-child { margin-bottom: 0; }
+p.lede { color: var(--ink-soft); }
+
+section > p, section > .lede { max-width: 68ch; }
+
+ul.plain, ol.plain { margin: 0 0 1rem; padding-left: 1.2rem; max-width: 68ch; }
+ul.plain li, ol.plain li { margin-bottom: 0.45rem; color: var(--ink); }
+ul.plain li::marker { color: var(--accent); }
+
+strong { font-weight: 600; }
+
+a { color: var(--accent); }
+
+/* ---------- competitor table ---------- */
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; min-width: 640px; background: var(--paper-raised); }
+th, td {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  background: var(--accent-soft);
+}
+tr:last-child td { border-bottom: none; }
+td.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+tr.flag td { background: var(--amber-bg); }
+tr.flag td:first-child { font-weight: 600; }
+.pill {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  margin-left: 0.4rem;
+  white-space: nowrap;
+}
+
+/* ---------- diff callout (positioning) ---------- */
+.diff-box {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow);
+  margin: 1.4rem 0;
+}
+.diff-line { padding: 0.55rem 1rem; display: flex; gap: 0.7rem; align-items: flex-start; }
+.diff-line.rm { background: var(--del-bg); color: var(--del); }
+.diff-line.add { background: var(--add-bg); color: var(--add); }
+.diff-line .sym { flex-shrink: 0; opacity: 0.7; }
+.diff-line span.txt { color: var(--ink); font-family: "Public Sans", sans-serif; font-size: 0.92rem; }
+
+/* ---------- pricing cards ---------- */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.price-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.4rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.price-card.reco { border-color: var(--accent); position: relative; }
+.price-card.reco::before {
+  content: "önerilen";
+  position: absolute;
+  top: -0.6rem;
+  left: 1.2rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+.price-card .plan-name { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--ink-faint); letter-spacing: 0.04em; text-transform: uppercase; }
+.price-card .plan-price { font-family: "Source Serif 4", serif; font-size: 2rem; font-weight: 600; color: var(--ink); }
+.price-card .plan-price small { font-family: "Public Sans", sans-serif; font-size: 0.95rem; font-weight: 400; color: var(--ink-faint); }
+.price-card ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.price-card ul li { font-size: 0.87rem; color: var(--ink-soft); margin-bottom: 0.35rem; }
+.price-card ul li::marker { color: var(--accent); }
+
+/* ---------- roadmap: commit graph ---------- */
+.commit-log {
+  position: relative;
+  padding-left: 2.1rem;
+  border-left: 2px solid var(--line);
+  margin-left: 0.35rem;
+}
+.commit {
+  position: relative;
+  padding-bottom: 2.2rem;
+}
+.commit:last-child { padding-bottom: 0; }
+.commit::before {
+  content: "";
+  position: absolute;
+  left: -2.44rem;
+  top: 0.2rem;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  border: 2.5px solid var(--accent);
+}
+.commit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+.commit-hash {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.08rem 0.4rem;
+  border-radius: 4px;
+}
+.commit-title { font-weight: 600; font-size: 1.02rem; }
+.commit-when { font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; color: var(--ink-faint); margin-left: auto; }
+.commit-body { color: var(--ink-soft); font-size: 0.93rem; max-width: 62ch; }
+.commit-body ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.commit-body li { margin-bottom: 0.3rem; }
+
+/* ---------- risk grid ---------- */
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.risk-card {
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  border-radius: 10px;
+  padding: 1.1rem 1.2rem;
+}
+.risk-card .risk-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; }
+.risk-level { font-family: "IBM Plex Mono", monospace; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.12rem 0.4rem; border-radius: 4px; }
+.risk-level.high { background: var(--del-bg); color: var(--del); }
+.risk-level.mid { background: var(--amber-bg); color: var(--amber); }
+.risk-card p { font-size: 0.88rem; color: var(--ink-soft); margin: 0; }
+
+/* ---------- footer ---------- */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  margin-top: 4rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 2.6rem 1.1rem 4rem; }
+  .commit-when { margin-left: 0; }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span> ürün planı · v0.1</div>
+    <h1 class="title">Commit Günlüğü</h1>
+    <p class="dek">GitHub commit ve PR geçmişini, geliştirici jargonundan arındırılmış bir "yenilikler" bültenine çeviren, siteye tek satır script ile gömülen bir changelog widget'ı ve panosu. Bu belge fikri pazar verisiyle sınıyor, konumlandırmayı netleştiriyor ve bir MVP planı çıkarıyor.</p>
+    <div class="meta-row">
+      <span><b>hazırlayan</b> Claude · Asrın için</span>
+      <span><b>kapsam</b> pazar araştırması + ürün planı</span>
+      <span><b>durum</b> fiyatlandırma kararı bekliyor</span>
+    </div>
+  </header>
+
+  <section id="ozet">
+    <div class="section-head"><span class="section-num">§1</span><h2 class="section-title">Yönetici özeti</h2></div>
+    <p>Fikir sağlam ama <strong>boş bir alan değil</strong> — en yakın rakip, ReleaseGlow, neredeyse aynı vaadi taşıyor: AI ile commit'ten changelog üretimi, gömülebilir widget, tek script kurulum. Bunun anlamı fikri terk etmek değil; <strong>kimin için</strong> ve <strong>ne kadara</strong> sorularını rakiplerden farklı cevaplamak.</p>
+    <p>Önerilen konumlandırma: changelog araçlarının çoğu "bir SaaS'ın kendi ürünü için changelog'u" hedefliyor. Ajanslar ve freelance geliştiriciler için <strong>her müşteri sitesine dakikalar içinde beyaz etiketli bir "yenilikler" widget'ı kurma</strong> ihtiyacı büyük ölçüde karşılanmamış — bu da tam olarak Claude Code'un uçtan uca üretebileceği bir SaaS kapsamı.</p>
+  </section>
+
+  <section id="pazar">
+    <div class="section-head"><span class="section-num">§2</span><h2 class="section-title">Pazar ve fiyat haritası</h2></div>
+    <p class="lede">Web araştırmasından toplanan güncel (2026) fiyatlandırmalar. Amaç: mevcut oyuncuların nerede pahalı, nerede karmaşık, nerede "sadece changelog" olduğunu görmek.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Araç</th><th>Giriş fiyatı</th><th>Fiyat modeli</th><th>Not</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Headway</td><td class="num">$0 → $29/ay</td><td>Sabit, sınırsız kullanıcı</td><td>Sadece changelog, AI yok</td></tr>
+          <tr><td>Frill</td><td class="num">$25/ay</td><td>Kademeli</td><td>Feedback + roadmap + changelog bir arada</td></tr>
+          <tr><td>ReleaseNotes.io</td><td class="num">$0 → $29/ay</td><td>+ $19/1000 abone</td><td>Abone tabanlı ek ücret</td></tr>
+          <tr><td>Beamer</td><td class="num">$49–299/ay</td><td>MAU tabanlı</td><td>Feedback/NPS ayrı ücretli eklenti</td></tr>
+          <tr><td>Changelogfy</td><td class="num">$49–249/ay</td><td>Sabit, katmanlı</td><td>All-in-one, ağır</td></tr>
+          <tr><td>AnnounceKit</td><td class="num">$79/ay</td><td>Sabit, proje başı</td><td>10+ widget modu, MAU yok</td></tr>
+          <tr class="flag"><td>ReleaseGlow <span class="pill">doğrudan rakip</span></td><td class="num">$19–129/ay</td><td>Sabit + AI kredi sistemi</td><td>GitHub commit → AI changelog, tek satır widget — <strong>bu fikrin neredeyse birebir aynısı</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">Çıkarım: pazarda <strong>$19 altı, kurulumu tek satır, ajans/beyaz-etiket odaklı</strong> bir seçenek yok. Herkes ya "MAU'ya göre pahalılaşan" ya da "feedback + roadmap + survey ile şişirilmiş all-in-one" modelinde. Küçük ajans ve indie geliştirici segmenti fiyata duyarlı ve tek özellik istiyor: <em>commit'i güzel bir cümleye çevir, sitede göster</em>.</p>
+  </section>
+
+  <section id="konumlandirma">
+    <div class="section-head"><span class="section-num">§3</span><h2 class="section-title">Farklılaşma</h2></div>
+    <p class="lede">ReleaseGlow'un yaptığını kopyalamak yerine, onun hedeflemediği üç noktaya odaklanmak öneriliyor:</p>
+    <div class="diff-box">
+      <div class="diff-line rm"><span class="sym">−</span><span class="txt">Rakipler: tek proje sahibi, kendi SaaS'ı için changelog yazar</span></div>
+      <div class="diff-line add"><span class="sym">+</span><span class="txt">Commit Günlüğü: bir ajans/freelancer, 5–20 <strong>müşteri</strong> sitesine kendi markası altında changelog kurar</span></div>
+      <div class="diff-line rm"><span class="sym">−</span><span class="txt">Rakipler: MAU'ya göre fiyat büyür, ya da kredi sistemiyle karmaşıklaşır</span></div>
+      <div class="diff-line add"><span class="sym">+</span><span class="txt">Commit Günlüğü: repo/proje başına düz fiyat, sınırsız ziyaretçi</span></div>
+      <div class="diff-line rm"><span class="sym">−</span><span class="txt">Rakipler: dashboard'da elle "yeni entry" yazma iş akışı öncelikli, GitHub entegrasyonu ek özellik</span></div>
+      <div class="diff-line add"><span class="sym">+</span><span class="txt">Commit Günlüğü: GitHub App kurulumundan sonra sıfır elle giriş — commit/PR birleşince otomatik taslak, onay tek tık</span></div>
+    </div>
+    <p>Bu konumlandırma aynı zamanda <strong>Türkiye/EMEA'daki küçük yazılım ajansları</strong> gibi, İngilizce pazarlama bütçesi olmayan ama uluslararası müşteriye hizmet veren segmentte de doğal bir dağıtım kanalı (Mikoshi'nin kendi ekosistemi dahil) sağlar.</p>
+  </section>
+
+  <section id="kapsam">
+    <div class="section-head"><span class="section-num">§4</span><h2 class="section-title">MVP kapsamı</h2></div>
+    <ul class="plain">
+      <li><strong>GitHub App kurulumu</strong> — OAuth ile repo seçimi, webhook otomatik kayıt (push, PR merge, release).</li>
+      <li><strong>AI özetleme</strong> — commit mesajları + PR başlığı/açıklaması bir LLM'e verilir, "Yenilikler / Düzeltmeler / İyileştirmeler" kategorili, jargon içermeyen 1-2 cümlelik maddeler üretir. Taslak; yayınlamadan önce panoda düzenlenebilir.</li>
+      <li><strong>Gömülebilir widget</strong> — tek `&lt;script&gt;` satırı, sağ-alt köşe rozet/popup + tam changelog sayfası (`/changelog`). Beyaz etiket: logo, renk, font müşteriye özel.</li>
+      <li><strong>Ajans panosu</strong> — tek hesaptan birden fazla proje/müşteri yönetimi, her biri ayrı alt-marka.</li>
+      <li><strong>Yayın akışı</strong> — otomatik taslak → onay → yayınla; e-posta/Slack bildirimi opsiyonel (v2).</li>
+    </ul>
+    <p><strong>MVP'ye girmeyecekler</strong> (rakiplerin şiştiği yer, bilinçli olarak dışarıda bırakılıyor): geri bildirim panosu, oylama, NPS anketleri, çoklu dil çevirisi. Bunlar sonraki fazlarda ayrı, isteğe bağlı modül olarak eklenebilir.</p>
+  </section>
+
+  <section id="teknoloji">
+    <div class="section-head"><span class="section-num">§5</span><h2 class="section-title">Teknik yaklaşım</h2></div>
+    <ul class="plain">
+      <li><strong>Frontend/Dashboard</strong> — Next.js + Tailwind; pano ve genel değişim sayfası tasarımı frontend-design plugin'i ile ele alınacak (henüz ekran tasarımına geçilmedi, bu belge onun öncesindeki karar aşaması).</li>
+      <li><strong>Widget</strong> — bağımsız, framework'süz, &lt;15KB minified vanilla JS; müşterinin sitesine performans yükü bindirmemesi kritik farklılaştırıcı.</li>
+      <li><strong>Backend</strong> — GitHub Webhook alıcı + kuyruk (Mikoshi VDS'te zaten Redis/Dramatiq deneyimi var — aynı worker deseni tekrar kullanılabilir), Postgres.</li>
+      <li><strong>AI katmanı</strong> — özetleme için ucuz/hızlı bir model (maliyet kontrolü şart, ReleaseGlow'un "kredi sistemi" şikayet noktası olduğu için burada <em>sabit fiyata dahil, sınırsız özetleme</em> bir farklılaştırıcı olabilir).</li>
+      <li><strong>Barındırma</strong> — mevcut Mikoshi VDS altyapısına (Caddy + Cloudflare Tunnel + Docker Compose) yeni bir servis olarak eklenebilir; ek sunucu maliyeti yok.</li>
+    </ul>
+  </section>
+
+  <section id="fiyatlandirma">
+    <div class="section-head"><span class="section-num">§6</span><h2 class="section-title">Fiyatlandırma önerisi</h2></div>
+    <p class="lede">Orijinal hedef $15–35/ay bandı, pazar verisiyle tutarlı ve savunulabilir — hatta rakiplerin çoğunun (Beamer, Changelogfy, AnnounceKit) girdiği $49+ bandının altında kalarak fiyat avantajı yaratıyor. Üç katman öneriliyor:</p>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <span class="plan-name">Solo</span>
+        <span class="plan-price">$15<small>/ay</small></span>
+        <p style="font-size:0.85rem;color:var(--ink-soft)">Tek ürününe changelog kuracak bağımsız geliştirici.</p>
+        <ul>
+          <li>1 repo / proje</li>
+          <li>Sınırsız ziyaretçi, sınırsız AI özet</li>
+          <li>Widget + changelog sayfası</li>
+          <li>Commit Günlüğü ibaresi görünür</li>
+        </ul>
+      </div>
+      <div class="price-card reco">
+        <span class="plan-name">Agency</span>
+        <span class="plan-price">$29<small>/ay</small></span>
+        <p style="font-size:0.85rem;color:var(--ink-soft)">Birden çok müşteriye hizmet veren freelancer/ajans.</p>
+        <ul>
+          <li>5 repo / proje</li>
+          <li>Tam beyaz etiket (marka gizli)</li>
+          <li>Özel alan adı (changelog.musteri.com)</li>
+          <li>Öncelikli AI işleme</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <span class="plan-name">Studio</span>
+        <span class="plan-price">$35<small>/ay</small><small style="display:block;font-size:0.7rem">ek repo başına +$3</small></span>
+        <p style="font-size:0.85rem;color:var(--ink-soft)">Büyüyen ajans, 10+ aktif müşteri projesi.</p>
+        <ul>
+          <li>15 repo / proje dahil</li>
+          <li>Alt-hesap / ekip erişimi</li>
+          <li>API erişimi (özel entegrasyon)</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:1.1rem">Yıllık ödemede %20 indirim (pazardaki standart) ve <strong>14 gün ücretsiz deneme</strong> — kredi kartsız — önerilir; ReleaseGlow'un kredi sistemi karşısında "sınırsız AI özet, sabit fiyat" mesajı net bir satış argümanı olur.</p>
+  </section>
+
+  <section id="yol-haritasi">
+    <div class="section-head"><span class="section-num">§7</span><h2 class="section-title">Yol haritası</h2></div>
+    <div class="commit-log">
+      <div class="commit">
+        <div class="commit-head"><span class="commit-hash">faz-1</span><span class="commit-title">MVP: tek repo, çekirdek akış</span><span class="commit-when">hafta 1–3</span></div>
+        <div class="commit-body">GitHub App + webhook, AI özetleme, widget, tek plan (Solo) ile ilk 5–10 kullanıcı. Frontend-design plugin ile pano ve widget arayüzü tasarlanır.</div>
+      </div>
+      <div class="commit">
+        <div class="commit-head"><span class="commit-hash">faz-2</span><span class="commit-title">Beyaz etiket + Agency planı</span><span class="commit-when">hafta 4–6</span></div>
+        <div class="commit-body">
+          <ul>
+            <li>Çoklu proje yönetimi, özel alan adı</li>
+            <li>Ajanslara doğrudan erişim: freelancer topluluklarında (Indie Hackers, Reddit r/SaaS, Türkçe geliştirici toplulukları) ilk 20 kullanıcı</li>
+          </ul>
+        </div>
+      </div>
+      <div class="commit">
+        <div class="commit-head"><span class="commit-hash">faz-3</span><span class="commit-title">Studio planı + API</span><span class="commit-when">ay 3</span></div>
+        <div class="commit-body">Ekip erişimi, API, GitLab/Bitbucket desteği değerlendirmesi (GitHub dışı talep gelirse).</div>
+      </div>
+      <div class="commit">
+        <div class="commit-head"><span class="commit-hash">faz-4</span><span class="commit-title">Genişleme modülleri</span><span class="commit-when">ay 4+</span></div>
+        <div class="commit-body">Talebe göre: e-posta dijesti, çoklu dil çevirisi, basit geri bildirim widget'ı — MVP'nin dışında tutulan ama rakiplerin sunduğu özellikler, ancak yalnızca gelir doğrulandıktan sonra.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="riskler">
+    <div class="section-head"><span class="section-num">§8</span><h2 class="section-title">Riskler</h2></div>
+    <div class="risk-grid">
+      <div class="risk-card">
+        <div class="risk-title">ReleaseGlow doğrudan çakışıyor <span class="risk-level high">yüksek</span></div>
+        <p>Neredeyse aynı vaat, kurulu marka. Ajans/beyaz-etiket ve daha düşük fiyat bandıyla farklılaşmak şart — aksi halde özellik yarışına girilir ve kaybedilir.</p>
+      </div>
+      <div class="risk-card">
+        <div class="risk-title">AI maliyeti / kalitesi <span class="risk-level mid">orta</span></div>
+        <p>"Sınırsız özetleme, sabit fiyat" vaadi, kötüye kullanım (çok büyük repo, sık push) karşısında maliyeti öngörülemez kılabilir. Rate-limit/adil kullanım politikası MVP'de tanımlanmalı.</p>
+      </div>
+      <div class="risk-card">
+        <div class="risk-title">Soğuk başlangıç <span class="risk-level mid">orta</span></div>
+        <p>Changelog araçları "network effect" değil, satın alma kararı yavaş. İlk 10 kullanıcıyı organik topluluklar yerine doğrudan ajans/freelancer DM'leriyle bulmak daha hızlı olabilir.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="sonraki">
+    <div class="section-head"><span class="section-num">§9</span><h2 class="section-title">Sonraki adım</h2></div>
+    <p>Fiyatlandırma kararı netleşince (Solo/Agency/Studio bandı onaylanır veya revize edilir), pano ve widget'ın ekran tasarımına <strong>frontend-design plugin'i</strong> ile geçilebilir — bu belge o aşamadan önceki karar dokümanı olarak tutuldu.</p>
+  </section>
+
+  <footer>
+    <span>commit-gunlugu / plan.md</span>
+    <span>durum: taslak · v0.1</span>
+  </footer>
+
+</div>
