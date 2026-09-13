@@ -1,27 +1,14 @@
 /**
- * Commit Günlüğü — Gömülebilir Sürüm Günlüğü & Değişiklik Listesi Widget'ı
- * Bağımsız (Zero-dependency) ve Shadow DOM ile tam stil izolasyonu.
- *
- * Kullanım Biçimleri:
- * 1. Sabit Buton & Açılır Panel (Badge Popover):
- *    <script src="https://commit.dixtuel.tr/static/js/widget.js" data-key="w_xyz..." async></script>
- *
- * 2. Google AdSense Benzeri Sayfa İçi Gömülü Kutu (Kare, Dikdörtgen, Banner):
- *    <!-- Kare Kutu (Sidebar / Grid için) -->
- *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="square"></div>
- *
- *    <!-- Yatay Banner (Header altı / Footer üstü için) -->
- *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="banner"></div>
- *
- *    <!-- Dikey Kart Listesi (İçerik kenarı / Sidebar için) -->
- *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="card" data-limit="3"></div>
- *
- *    <script src="https://commit.dixtuel.tr/static/js/widget.js" async></script>
+ * Commit Günlüğü — Gömülebilir Sürüm Günlüğü & Değişiklik Akışı Widget'ı
+ * Bağımsız (Zero-dependency), AdBlocker dostu ve Shadow DOM korumalı.
  */
 (function () {
   'use strict';
 
   const STORAGE_KEY = 'cg_widget_last_seen';
+  const DEFAULT_ORIGIN = 'https://commit.dixtuel.tr';
+  let isInitialized = false;
+
   const currentScriptTag = document.currentScript;
   const dataCache = new Map();
 
@@ -57,43 +44,56 @@
     if (!current) {
       current = document.querySelector('script[data-key]') || document.querySelector('script[src*="widget.js"]');
     }
-    if (!current) return null;
 
-    let key = current.getAttribute('data-key');
-    let origin = '';
+    let origin = DEFAULT_ORIGIN;
+    let key = null;
+    let mode = 'badge';
+    let layout = 'card';
+    let theme = 'auto';
+    let limit = 5;
 
-    try {
-      const url = new URL(current.src);
-      origin = url.origin;
-      if (!key) {
-        key = url.searchParams.get('key');
+    if (current) {
+      key = current.getAttribute('data-key');
+      try {
+        if (current.src) {
+          const url = new URL(current.src, window.location.href);
+          origin = url.origin;
+          if (!key) {
+            key = url.searchParams.get('key');
+          }
+        }
+      } catch (e) {
+        origin = window.location.origin || DEFAULT_ORIGIN;
       }
-    } catch (e) {
-      origin = window.location.origin;
+
+      mode = current.getAttribute('data-mode') || 'badge';
+      layout = current.getAttribute('data-layout') || 'card';
+      theme = current.getAttribute('data-theme') || 'auto';
+      limit = parseInt(current.getAttribute('data-limit') || '5', 10);
     }
 
-    const mode = current.getAttribute('data-mode') || 'badge';
-    const layout = current.getAttribute('data-layout') || 'card';
-    const theme = current.getAttribute('data-theme') || 'auto';
-    const limit = parseInt(current.getAttribute('data-limit') || '5', 10);
-
-    return key ? { key, origin, mode, layout, theme, limit, scriptElement: current } : null;
+    return { key, origin, mode, layout, theme, limit, scriptElement: current };
   }
 
   async function fetchWidgetData(origin, key) {
-    const cacheKey = `${origin}:${key}`;
+    const targetOrigin = origin || DEFAULT_ORIGIN;
+    const cacheKey = `${targetOrigin}:${key}`;
     if (dataCache.has(cacheKey)) {
       return dataCache.get(cacheKey);
     }
 
-    const promise = (async () => {
-      const res = await fetch(`${origin}/api/v1/widget/${key}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    })();
-
-    dataCache.set(cacheKey, promise);
-    return promise;
+    try {
+      const res = await fetch(`${targetOrigin}/api/v1/widget/${key}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      dataCache.set(cacheKey, data);
+      return data;
+    } catch (err) {
+      dataCache.delete(cacheKey);
+      throw err;
+    }
   }
 
   function getCommonStyles(brandColor, theme) {
@@ -167,8 +167,8 @@
 
     const shadow = host.attachShadow({ mode: 'open' });
     const lastSeen = Number(localStorage.getItem(STORAGE_KEY) || 0);
-    const unreadCount = data.entries.filter(e => new Date(e.published_at).getTime() > lastSeen).length;
-    const brandColor = data.brand.color || '#5b8a7a';
+    const unreadCount = (data.entries || []).filter(e => new Date(e.published_at).getTime() > lastSeen).length;
+    const brandColor = data.brand?.color || '#5b8a7a';
 
     const style = document.createElement('style');
     style.textContent = `
@@ -230,7 +230,7 @@
     const panel = document.createElement('div');
     panel.className = 'cg-panel';
 
-    const entriesHtml = data.entries.slice(0, 5).map(e => `
+    const entriesHtml = (data.entries || []).slice(0, 5).map(e => `
       <div class="cg-item">
         <div class="cg-meta">
           <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
@@ -244,7 +244,7 @@
 
     panel.innerHTML = `
       <div class="cg-header">
-        <h4>${escapeHtml(data.brand.name || 'Yenilikler')}</h4>
+        <h4>${escapeHtml(data.brand?.name || 'Yenilikler')}</h4>
         <button class="cg-close-btn">&times;</button>
       </div>
       <div class="cg-content">
@@ -274,22 +274,29 @@
     shadow.appendChild(btn);
   }
 
-  // --- 2. GOOGLE ADSENSE BENZERİ INLINE GÖMÜLÜ WIDGET ---
+  // --- 2. GOOGLE ADSENSE BENZERİ SAYFA İÇİ GÖMÜLÜ WIDGET ---
   function renderInlineWidget(container, data, origin, opts) {
+    if (container.shadowRoot) return; // Zaten render edildiyse çift çalıştırma
+
     const shadow = container.attachShadow({ mode: 'open' });
-    const brandColor = opts.brandColor || data.brand.color || '#5b8a7a';
-    const layout = opts.layout || 'card'; // 'square' | 'banner' | 'card'
+    const brandColor = opts.brandColor || data.brand?.color || '#5b8a7a';
+    const rawLayout = (opts.layout || 'card').toLowerCase();
+    
+    // Güvenli layout eşleştirmesi (AdBlock filtrelerinden kaçınan isimler)
+    let layout = 'card';
+    if (rawLayout === 'square' || rawLayout === 'box') layout = 'box';
+    else if (rawLayout === 'banner' || rawLayout === 'strip' || rawLayout === 'horizontal') layout = 'strip';
+
     const theme = opts.theme || 'auto';
-    const limit = opts.limit || (layout === 'square' ? 2 : layout === 'banner' ? 1 : 3);
+    const limit = opts.limit || (layout === 'box' ? 2 : layout === 'strip' ? 1 : 3);
 
     const style = document.createElement('style');
-
     let layoutSpecificStyles = '';
 
-    if (layout === 'square') {
-      // 1:1 Kare / Box Layout (Sidebar / Grid için)
+    if (layout === 'box') {
+      // 1:1 Kare / Kutu
       layoutSpecificStyles = `
-        .cg-inline-box {
+        .cg-wrap-box {
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
@@ -301,18 +308,18 @@
           justify-content: space-between;
           width: 100%;
           max-width: 360px;
-          min-height: 320px;
+          min-height: 300px;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .cg-inline-box:hover {
+        .cg-wrap-box:hover {
           transform: translateY(-2px);
           box-shadow: 0 8px 24px -4px rgba(0,0,0,0.08);
         }
-        .cg-box-header {
+        .cg-box-head {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-bottom: 14px;
+          padding-bottom: 12px;
           border-bottom: 1px solid var(--cg-border);
         }
         .cg-box-title {
@@ -325,17 +332,17 @@
         }
         .cg-pulse-dot {
           width: 8px; height: 8px; border-radius: 50%; background: var(--cg-brand);
-          display: inline-block; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+          display: inline-block; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
         }
-        .cg-box-body {
+        .cg-box-entries {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 14px;
-          padding: 16px 0;
+          gap: 12px;
+          padding: 14px 0;
           overflow: hidden;
         }
-        .cg-entry-item {
+        .cg-entry-unit {
           display: flex;
           flex-direction: column;
           gap: 4px;
@@ -345,16 +352,8 @@
           align-items: center;
           gap: 6px;
         }
-        .cg-entry-date {
-          font-size: 11px;
-          color: var(--cg-text-dim);
-        }
-        .cg-entry-title {
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--cg-text);
-          line-height: 1.35;
-        }
+        .cg-entry-date { font-size: 11px; color: var(--cg-text-dim); }
+        .cg-entry-title { font-size: 13px; font-weight: 600; color: var(--cg-text); line-height: 1.35; }
         .cg-entry-desc {
           font-size: 12px;
           color: var(--cg-text-muted);
@@ -364,8 +363,8 @@
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
-        .cg-box-footer {
-          padding-top: 14px;
+        .cg-box-foot {
+          padding-top: 12px;
           border-top: 1px solid var(--cg-border);
           display: flex;
           align-items: center;
@@ -374,7 +373,7 @@
         .cg-btn-link {
           background: var(--cg-brand);
           color: #ffffff;
-          padding: 8px 14px;
+          padding: 7px 14px;
           border-radius: 8px;
           font-size: 12px;
           font-weight: 600;
@@ -385,16 +384,12 @@
           transition: opacity 0.15s ease;
         }
         .cg-btn-link:hover { opacity: 0.9; }
-        .cg-watermark {
-          font-size: 11px;
-          color: var(--cg-text-dim);
-          text-decoration: none;
-        }
+        .cg-watermark { font-size: 11px; color: var(--cg-text-dim); text-decoration: none; }
       `;
-    } else if (layout === 'banner') {
-      // Yatay Dikdörtgen / Banner Layout (Header altı / İçerik araları için)
+    } else if (layout === 'strip') {
+      // Yatay Dikdörtgen / Bar
       layoutSpecificStyles = `
-        .cg-inline-banner {
+        .cg-wrap-strip {
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
@@ -408,14 +403,14 @@
           width: 100%;
           flex-wrap: wrap;
         }
-        .cg-banner-left {
+        .cg-strip-left {
           display: flex;
           align-items: center;
           gap: 12px;
           flex: 1;
           min-width: 260px;
         }
-        .cg-banner-badge {
+        .cg-strip-badge {
           background: var(--cg-surface);
           border: 1px solid var(--cg-border);
           padding: 6px 10px;
@@ -428,12 +423,8 @@
           align-items: center;
           gap: 6px;
         }
-        .cg-banner-info {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .cg-banner-title {
+        .cg-strip-info { display: flex; flex-direction: column; gap: 2px; }
+        .cg-strip-title {
           font-size: 14px;
           font-weight: 600;
           color: var(--cg-text);
@@ -442,21 +433,21 @@
           gap: 8px;
           flex-wrap: wrap;
         }
-        .cg-banner-desc {
+        .cg-strip-desc {
           font-size: 12px;
           color: var(--cg-text-muted);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          max-width: 600px;
+          max-width: 580px;
         }
-        .cg-banner-right {
+        .cg-strip-right {
           display: flex;
           align-items: center;
           gap: 12px;
           white-space: nowrap;
         }
-        .cg-btn-banner {
+        .cg-btn-strip {
           background: var(--cg-brand);
           color: #ffffff;
           padding: 8px 16px;
@@ -468,12 +459,12 @@
           align-items: center;
           gap: 4px;
         }
-        .cg-btn-banner:hover { opacity: 0.9; }
+        .cg-btn-strip:hover { opacity: 0.9; }
       `;
     } else {
-      // Standart 'card' / Dikey Liste Kartı (Blog kenarı, dokümantasyon, vb.)
+      // card / dikey liste
       layoutSpecificStyles = `
-        .cg-inline-card {
+        .cg-wrap-card {
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
@@ -483,7 +474,7 @@
           width: 100%;
           max-width: 440px;
         }
-        .cg-card-header {
+        .cg-card-head {
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -491,47 +482,15 @@
           border-bottom: 1px solid var(--cg-border);
           margin-bottom: 12px;
         }
-        .cg-card-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--cg-text);
-        }
-        .cg-card-list {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .cg-card-item {
-          padding-bottom: 12px;
-          border-bottom: 1px solid var(--cg-border);
-        }
-        .cg-card-item:last-child {
-          padding-bottom: 0;
-          border-bottom: none;
-        }
-        .cg-card-meta {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 4px;
-        }
-        .cg-card-date {
-          font-size: 11px;
-          color: var(--cg-text-dim);
-        }
-        .cg-card-entry-title {
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--cg-text);
-          margin-bottom: 4px;
-          line-height: 1.4;
-        }
-        .cg-card-entry-desc {
-          font-size: 12px;
-          color: var(--cg-text-muted);
-          line-height: 1.45;
-        }
-        .cg-card-footer {
+        .cg-card-heading { font-size: 15px; font-weight: 700; color: var(--cg-text); }
+        .cg-card-list { display: flex; flex-direction: column; gap: 14px; }
+        .cg-card-unit { padding-bottom: 12px; border-bottom: 1px solid var(--cg-border); }
+        .cg-card-unit:last-child { padding-bottom: 0; border-bottom: none; }
+        .cg-card-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .cg-card-date { font-size: 11px; color: var(--cg-text-dim); }
+        .cg-card-title { font-size: 13px; font-weight: 600; color: var(--cg-text); margin-bottom: 4px; line-height: 1.4; }
+        .cg-card-desc { font-size: 12px; color: var(--cg-text-muted); line-height: 1.45; }
+        .cg-card-foot {
           margin-top: 14px;
           padding-top: 12px;
           border-top: 1px solid var(--cg-border);
@@ -540,16 +499,9 @@
           justify-content: space-between;
           font-size: 11px;
         }
-        .cg-card-footer a {
-          color: var(--cg-brand);
-          text-decoration: none;
-          font-weight: 600;
-        }
-        .cg-card-footer a:hover { text-decoration: underline; }
-        .cg-card-brand {
-          color: var(--cg-text-dim);
-          text-decoration: none;
-        }
+        .cg-card-foot a { color: var(--cg-brand); text-decoration: none; font-weight: 600; }
+        .cg-card-foot a:hover { text-decoration: underline; }
+        .cg-card-watermark { color: var(--cg-text-dim); text-decoration: none; }
       `;
     }
 
@@ -559,12 +511,12 @@
     `;
     shadow.appendChild(style);
 
-    const entries = data.entries.slice(0, limit);
+    const entries = (data.entries || []).slice(0, limit);
     const wrapper = document.createElement('div');
 
-    if (layout === 'square') {
+    if (layout === 'box') {
       const itemsHtml = entries.map(e => `
-        <div class="cg-entry-item">
+        <div class="cg-entry-unit">
           <div class="cg-entry-meta">
             <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
             <span class="cg-entry-date">${(e.published_at || '').substring(0, 10)}</span>
@@ -574,74 +526,73 @@
         </div>
       `).join('');
 
-      wrapper.className = 'cg-inline-box';
+      wrapper.className = 'cg-wrap-box';
       wrapper.innerHTML = `
-        <div class="cg-box-header">
+        <div class="cg-box-head">
           <div class="cg-box-title">
             <span class="cg-pulse-dot"></span>
-            <span>${escapeHtml(data.brand.name || 'Yenilikler')}</span>
+            <span>${escapeHtml(data.brand?.name || 'Yenilikler')}</span>
           </div>
           <span style="font-size: 11px; font-weight: 600; color: var(--cg-text-dim);">Sürüm Günlüğü</span>
         </div>
-        <div class="cg-box-body">
+        <div class="cg-box-entries">
           ${itemsHtml}
         </div>
-        <div class="cg-box-footer">
+        <div class="cg-box-foot">
           <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-link">
             Tümünü Gör &rarr;
           </a>
           <a href="${origin}" target="_blank" rel="noopener" class="cg-watermark">Commit Günlüğü</a>
         </div>
       `;
-    } else if (layout === 'banner') {
+    } else if (layout === 'strip') {
       const topEntry = entries[0] || { title: 'Yeni Güncelleme', category: 'NEW', body: '', published_at: '' };
-      wrapper.className = 'cg-inline-banner';
+      wrapper.className = 'cg-wrap-strip';
       wrapper.innerHTML = `
-        <div class="cg-banner-left">
-          <div class="cg-banner-badge">
+        <div class="cg-strip-left">
+          <div class="cg-strip-badge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             <span>YENİLİK</span>
           </div>
-          <div class="cg-banner-info">
-            <div class="cg-banner-title">
+          <div class="cg-strip-info">
+            <div class="cg-strip-title">
               <span class="pill ${categoryClass(topEntry.category)}">${categoryLabel(topEntry.category)}</span>
               <span>${escapeHtml(topEntry.title)}</span>
             </div>
-            ${topEntry.body ? `<div class="cg-banner-desc">${escapeHtml(topEntry.body)}</div>` : ''}
+            ${topEntry.body ? `<div class="cg-strip-desc">${escapeHtml(topEntry.body)}</div>` : ''}
           </div>
         </div>
-        <div class="cg-banner-right">
+        <div class="cg-strip-right">
           <span style="font-size: 11px; color: var(--cg-text-dim);">${(topEntry.published_at || '').substring(0, 10)}</span>
-          <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-banner">
+          <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-strip">
             İncele &rarr;
           </a>
         </div>
       `;
     } else {
-      // card
       const itemsHtml = entries.map(e => `
-        <div class="cg-card-item">
+        <div class="cg-card-unit">
           <div class="cg-card-meta">
             <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
             <span class="cg-card-date">${(e.published_at || '').substring(0, 10)}</span>
           </div>
-          <div class="cg-card-entry-title">${escapeHtml(e.title)}</div>
-          <div class="cg-card-entry-desc">${escapeHtml(e.body)}</div>
+          <div class="cg-card-title">${escapeHtml(e.title)}</div>
+          <div class="cg-card-desc">${escapeHtml(e.body)}</div>
         </div>
       `).join('');
 
-      wrapper.className = 'cg-inline-card';
+      wrapper.className = 'cg-wrap-card';
       wrapper.innerHTML = `
-        <div class="cg-card-header">
-          <h4 class="cg-card-title">${escapeHtml(data.brand.name || 'Yenilikler')}</h4>
+        <div class="cg-card-head">
+          <h4 class="cg-card-heading">${escapeHtml(data.brand?.name || 'Yenilikler')}</h4>
           <span style="font-size: 11px; color: var(--cg-brand); font-weight: 600;">Son Sürümler</span>
         </div>
         <div class="cg-card-list">
           ${itemsHtml}
         </div>
-        <div class="cg-card-footer">
+        <div class="cg-card-foot">
           <a href="${data.changelog_url}" target="_blank" rel="noopener">Tüm Güncellemeler &rarr;</a>
-          <a href="${origin}" target="_blank" rel="noopener" class="cg-card-brand">Commit Günlüğü</a>
+          <a href="${origin}" target="_blank" rel="noopener" class="cg-card-watermark">Commit Günlüğü</a>
         </div>
       `;
     }
@@ -651,17 +602,20 @@
 
   // --- 3. BAŞLATICI / INITIALIZER ---
   async function initWidgets() {
-    const scriptConfig = getScriptConfig();
-    const inlineElements = Array.from(document.querySelectorAll('[data-cg-widget], .commit-gunlugu-widget, .commit-gunlugu-embed'));
+    if (isInitialized) return;
+    isInitialized = true;
 
-    // 1) Sayfada AdSense tarzı yerleştirilmiş inline container'lar varsa onları doldur
+    const scriptConfig = getScriptConfig();
+    const inlineElements = Array.from(document.querySelectorAll('[data-cg-widget], [data-cg-key], .commit-gunlugu-widget, .commit-gunlugu-embed'));
+
+    // 1) Sayfada AdSense tarzı yerleştirilmiş inline container'lar varsa doldur
     for (const el of inlineElements) {
-      const key = el.getAttribute('data-key') || (scriptConfig ? scriptConfig.key : null);
+      const key = el.getAttribute('data-key') || el.getAttribute('data-cg-key') || scriptConfig.key;
       if (!key) continue;
 
-      const origin = el.getAttribute('data-origin') || (scriptConfig ? scriptConfig.origin : window.location.origin);
-      const layout = el.getAttribute('data-layout') || (scriptConfig ? scriptConfig.layout : 'card');
-      const theme = el.getAttribute('data-theme') || (scriptConfig ? scriptConfig.theme : 'auto');
+      const origin = el.getAttribute('data-origin') || scriptConfig.origin || DEFAULT_ORIGIN;
+      const layout = el.getAttribute('data-layout') || scriptConfig.layout || 'card';
+      const theme = el.getAttribute('data-theme') || scriptConfig.theme || 'auto';
       const brandColor = el.getAttribute('data-brand-color') || null;
       const limit = parseInt(el.getAttribute('data-limit') || '0', 10) || undefined;
 
@@ -675,8 +629,8 @@
       }
     }
 
-    // 2) Eğer script'in kendisi data-mode="inline" ise ve inline container yoksa script'in yerine göm
-    if (scriptConfig && scriptConfig.mode === 'inline' && inlineElements.length === 0 && scriptConfig.scriptElement) {
+    // 2) Eğer script'in kendisi data-mode="inline" ise
+    if (scriptConfig.mode === 'inline' && inlineElements.length === 0 && scriptConfig.scriptElement && scriptConfig.key) {
       const host = document.createElement('div');
       scriptConfig.scriptElement.parentNode.insertBefore(host, scriptConfig.scriptElement);
 
@@ -695,8 +649,8 @@
       return;
     }
 
-    // 3) Eğer script'te data-mode="badge" ise (veya varsayılan) ve data-key varsa sağ alttaki rozeti bas
-    if (scriptConfig && scriptConfig.key && scriptConfig.mode !== 'inline' && (!inlineElements.length || scriptConfig.mode === 'badge')) {
+    // 3) Badge Rozet (Sağ alttaki buton)
+    if (scriptConfig.key && scriptConfig.mode !== 'inline' && (!inlineElements.length || scriptConfig.mode === 'badge')) {
       try {
         const data = await fetchWidgetData(scriptConfig.origin, scriptConfig.key);
         if (data && data.entries && data.entries.length > 0) {

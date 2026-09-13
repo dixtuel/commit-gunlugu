@@ -5,22 +5,32 @@
   <title>Commit Günlüğü — Gömülebilir Widget Formatları</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; padding: 20px; }
+    .demo-container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+    .demo-card { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .demo-grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 768px) {
+      .demo-grid { grid-template-columns: 7fr 5fr; }
+    }
+    .slot-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-4 md:p-10 font-sans">
-  <div class="max-w-5xl mx-auto space-y-10">
+<body>
+  <div class="demo-container">
 
     <!-- Üst Başlık & Menü -->
-    <header class="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-300">
+    <header class="demo-card flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-emerald-600/20">
           CG
         </div>
         <div>
           <h1 class="text-xl font-bold tracking-tight text-slate-900">Commit Günlüğü Widget Vitrini</h1>
-          <p class="text-xs text-slate-500">Google AdSense Benzeri Ayarlanabilir Sayfa İçi Kutular & Sabit Rozet</p>
+          <p class="text-xs text-slate-500">Google AdSense Tarzı Sayfa İçi Kutular (Kare, Yatay, Dikey Kart) & Sağ Altta Rozet</p>
         </div>
       </div>
-      <div class="flex gap-2 text-xs font-semibold">
+      <div class="flex flex-wrap gap-2 text-xs font-semibold">
         <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full">Kare (Square)</span>
         <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">Yatay Banner</span>
         <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full">Dikey Kart</span>
@@ -28,44 +38,43 @@
     </header>
 
     <!-- 1. YATAY DİKDÖRTGEN / BANNER (Header altı veya içerik arası) -->
-    <section class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-          <span>1. Yatay Dikdörtgen (Banner)</span>
-          <span class="text-xs font-normal lowercase text-slate-400">data-layout="banner"</span>
-        </h2>
-        <span class="text-xs text-slate-400">Genişlik: %100 Esnek</span>
+    <section>
+      <div class="slot-title">
+        <span>1. Yatay Dikdörtgen (Banner)</span>
+        <span class="font-mono lowercase text-slate-400">data-layout="banner"</span>
       </div>
       <!-- Widget Mount Point -->
       <div class="commit-gunlugu-widget" 
+           data-cg-widget
            data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
            data-layout="banner"
            data-theme="light"></div>
     </section>
 
     <!-- İki Kolonlu Izgara (İçerik + Kenar Çubuğu) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div class="demo-grid items-start">
 
       <!-- Sol Taraf: Sayfa İçeriği & Dikey Kart -->
-      <div class="lg:col-span-7 space-y-6">
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+      <div class="space-y-6">
+        <div class="demo-card space-y-3">
           <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">Ürün Blogu / Makale</span>
-          <h3 class="text-2xl font-bold text-slate-900">
+          <h3 class="text-xl font-bold text-slate-900">
             Kullanıcılarınıza sürüm yeniliklerini tam yerinde duyurun.
           </h3>
           <p class="text-sm text-slate-600 leading-relaxed">
-            Klasik popover butonlarının yanı sıra artık sayfa düzeninize göre kare, yatay banner veya dikey liste kartları yerleştirebilirsiniz. Tıpkı Google AdSense reklam kutuları gibi, sitenizin istediğiniz bölümüne tek satırlık bir <code class="bg-slate-100 px-1 py-0.5 rounded text-pink-600 font-mono text-xs">&lt;div&gt;</code> eklemeniz yeterlidir.
+            Klasik açılır butonların yanı sıra artık sayfa düzeninize göre <strong>kare</strong>, <strong>yatay banner</strong> veya <strong>dikey liste kartları</strong> yerleştirebilirsiniz. Tıpkı Google AdSense reklam kutuları gibi, sitenizin istediğiniz bölümüne tek satırlık bir <code class="bg-slate-100 px-1 py-0.5 rounded text-pink-600 font-mono text-xs">&lt;div&gt;</code> eklemeniz yeterlidir.
           </p>
         </div>
 
         <!-- 2. DİKEY DİKDÖRTGEN / LİSTE KARTI -->
-        <section class="space-y-3">
-          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+        <section>
+          <div class="slot-title">
             <span>2. Dikey Dikdörtgen / Liste Kartı</span>
-            <span class="text-xs font-normal lowercase text-slate-400">data-layout="card" data-limit="3"</span>
-          </h2>
+            <span class="font-mono lowercase text-slate-400">data-layout="card" data-limit="3"</span>
+          </div>
           <!-- Widget Mount Point -->
           <div class="commit-gunlugu-widget" 
+               data-cg-widget
                data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
                data-layout="card"
                data-limit="3"
@@ -74,25 +83,23 @@
       </div>
 
       <!-- Sağ Taraf: Kenar Çubuğu (Sidebar) & Kare Kutu -->
-      <div class="lg:col-span-5 space-y-6">
+      <div class="space-y-6">
         <!-- 3. KARE KUTU (Square Box) -->
-        <section class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <span>3. Kare Kutu (Square Box)</span>
-              <span class="text-xs font-normal lowercase text-slate-400">data-layout="square"</span>
-            </h2>
-            <span class="text-xs text-slate-400">Sidebar / 300-360px</span>
+        <section>
+          <div class="slot-title">
+            <span>3. Kare Kutu (Square Box)</span>
+            <span class="font-mono lowercase text-slate-400">data-layout="square"</span>
           </div>
           <!-- Widget Mount Point -->
           <div class="commit-gunlugu-widget" 
+               data-cg-widget
                data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
                data-layout="square"
                data-limit="2"
                data-theme="light"></div>
         </section>
 
-        <div class="bg-slate-200/70 p-4 rounded-xl text-xs text-slate-600 space-y-2 border border-slate-300">
+        <div class="bg-slate-200/80 p-4 rounded-xl text-xs text-slate-600 space-y-2 border border-slate-300">
           <p class="font-semibold text-slate-800">📌 Nasıl Kullanılır?</p>
           <pre class="bg-slate-900 text-slate-100 p-2.5 rounded-lg overflow-x-auto text-[11px] font-mono leading-normal">&lt;!-- Kare / Kutu --&gt;
 &lt;div class="commit-gunlugu-widget" 
@@ -107,14 +114,14 @@
     </div>
 
     <!-- Alt Bilgi -->
-    <footer class="pt-8 border-t border-slate-300 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <footer class="pt-6 border-t border-slate-300 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4">
       <span>Commit Günlüğü &copy; 2026 • Tüm Hakları Saklıdır</span>
       <span class="font-medium text-slate-700">↘ Ekranın sağ altındaki sabit "Yenilikler" rozetine de tıklayabilirsiniz.</span>
     </footer>
 
   </div>
 
-  <!-- Tek Script ile Hem Sayfa İçi Kutuları Hem de Sağ Alttaki Rozeti Başlatır -->
-  <script src="/static/js/widget.js" data-key="w_feef676a5e9e49d1bc281c2712030ff7" data-mode="badge" async></script>
+  <!-- Tek Script ile Hem Sayfa İçi Kutuları Hem de Sağ Alttaki Rozeti Başlatır (Cache buster ?v=3 ile) -->
+  <script src="/static/js/widget.js?v=3" data-key="w_feef676a5e9e49d1bc281c2712030ff7" data-mode="badge" async></script>
 </body>
 </html>
