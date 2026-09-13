@@ -12,6 +12,7 @@ pub struct Config {
     pub ai_api_key: Option<String>,
     pub ai_model: Option<String>,
     pub app_url: String,
+    pub github_token: Option<String>,
     pub webhook_rate_limit_per_minute: u64,
     pub api_rate_limit_per_minute: u64,
 }
@@ -54,6 +55,10 @@ impl Config {
         let app_url = env::var("APP_BASE_URL")
             .unwrap_or_else(|_| "https://commit.dixtuel.tr".to_string());
 
+        let github_token = env::var("GITHUB_TOKEN")
+            .ok()
+            .filter(|t| !t.trim().is_empty());
+
         let webhook_rate_limit_per_minute = env::var("WEBHOOK_RATE_LIMIT_PER_MINUTE")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -75,6 +80,7 @@ impl Config {
             ai_api_key,
             ai_model,
             app_url,
+            github_token,
             webhook_rate_limit_per_minute,
             api_rate_limit_per_minute,
         }

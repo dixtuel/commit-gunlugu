@@ -82,8 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(routes::api::health_check))
         .route("/api/v1/entries/:id/publish", post(routes::api::publish_entry_handler))
         .route("/api/v1/entries/:id/dismiss", post(routes::api::dismiss_entry_handler))
+        .route("/api/v1/entries/:id/delete", post(routes::api::delete_entry_handler))
         .route("/api/v1/projects", get(routes::api::list_projects_handler).post(routes::api::create_project_handler))
         .route("/api/v1/projects/:id/settings", post(routes::api::update_project_settings_handler))
+        .route("/api/v1/projects/:id/delete", post(routes::api::delete_project_handler))
+        .route("/api/v1/projects/:id/entries", post(routes::api::create_manual_entry_handler))
         .route("/api/user/delete-account", post(routes::auth::delete_account_handler));
 
     // Kimlik Doğrulama (Auth) rotaları

@@ -303,6 +303,71 @@ pub async fn update_project_modes(
     Ok(())
 }
 
+pub async fn update_project_full_settings(
+    pool: &DbPool,
+    project_id: &str,
+    user_id: &str,
+    name: &str,
+    brand_color: &str,
+    parse_mode: &str,
+    audience: &str,
+    template_style: &str,
+) -> Result<bool, AppError> {
+    let res = sqlx::query(
+        r#"
+        UPDATE projects
+        SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?
+        "#
+    )
+    .bind(name)
+    .bind(brand_color)
+    .bind(parse_mode)
+    .bind(audience)
+    .bind(template_style)
+    .bind(project_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(res.rows_affected() > 0)
+}
+
+pub async fn delete_project(
+    pool: &DbPool,
+    project_id: &str,
+    user_id: &str,
+) -> Result<bool, AppError> {
+    let res = sqlx::query(
+        "DELETE FROM projects WHERE id = ? AND user_id = ?"
+    )
+    .bind(project_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(res.rows_affected() > 0)
+}
+
+pub async fn delete_entry(
+    pool: &DbPool,
+    entry_id: &str,
+    user_id: &str,
+) -> Result<bool, AppError> {
+    let res = sqlx::query(
+        r#"
+        DELETE FROM entries
+        WHERE id = ? AND project_id IN (SELECT id FROM projects WHERE user_id = ?)
+        "#
+    )
+    .bind(entry_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(res.rows_affected() > 0)
+}
+
 // ---------------------------------------------------------------------------
 // GİRİŞLER (ENTRIES) VE WEBHOOK LOGLARI
 // ---------------------------------------------------------------------------

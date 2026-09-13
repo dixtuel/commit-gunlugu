@@ -7,21 +7,39 @@
   <div class="dashboard-header">
     <div>
       <h1 class="page-title">Sürüm Günlüğü Yönetimi</h1>
-      <p class="page-desc">Giriş yapıldı: <strong>{{ current_user.name or current_user.email }}</strong> &bull; Projelerinizi ve changelog taslaklarınızı buradan yönetin.</p>
+      <p class="page-desc">Giriş yapıldı: <strong>{{ current_user.name or current_user.email }}</strong> &bull; Repolarınızı, sürüm notlarınızı ve entegrasyonlarınızı yönetin.</p>
     </div>
     <div class="header-action-group">
-      <button class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Hesap Ayarları</button>
-      <button class="btn btn-primary" onclick="toggleModal('project-modal')">Yeni Proje Ekle</button>
+      {% if projects %}
+      <button class="btn btn-secondary btn-sm" onclick="toggleModal('manual-entry-modal')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Yeni Sürüm Notu</span>
+      </button>
+      {% endif %}
+      <button class="btn btn-primary btn-sm" onclick="toggleModal('project-modal')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span>Yeni Repo Ekle</span>
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="toggleModal('delete-account-modal')">Hesap Ayarları</button>
     </div>
   </div>
 
   <div class="dashboard-layout">
+    <!-- Main Column: Entries Stream -->
     <div class="main-column">
       <div class="card">
         <div class="card-header">
-          <h3>Gelen Taslaklar ve Yayınlar</h3>
-          <span class="badge">{{ entries | length }} Kayıt</span>
+          <div class="header-filters">
+            <h3>Sürüm Notları Akışı</h3>
+            <div class="filter-tabs">
+              <button class="filter-btn active" data-filter="all" onclick="filterEntries('all')">Tümü ({{ entries | length }})</button>
+              <button class="filter-btn" data-filter="published" onclick="filterEntries('published')">Yayında</button>
+              <button class="filter-btn" data-filter="draft" onclick="filterEntries('draft')">Taslak</button>
+              <button class="filter-btn" data-filter="dismissed" onclick="filterEntries('dismissed')">Yoksayılan</button>
+            </div>
+          </div>
         </div>
+
         <div class="card-body">
           {% if entries %}
           <div class="entries-list">
@@ -29,11 +47,18 @@
             <div class="entry-item entry-status-{{ e.status | lower }}" id="entry-{{ e.id }}">
               <div class="entry-meta">
                 <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
-                <span class="status-pill status-{{ e.status | lower }}">{{ e.status }}</span>
+                <span class="status-pill status-{{ e.status | lower }}">
+                  {% if e.status == "PUBLISHED" %}Yayında
+                  {% elif e.status == "DRAFT" %}Taslak
+                  {% else %}Yoksayıldı{% endif %}
+                </span>
                 {% if e.author_username %}
                 <span class="author-tag">@{{ e.author_username }}</span>
                 {% endif %}
-                <span class="date-tag">{{ e.created_at[:10] }}</span>
+                <span class="date-tag">{{ (e.published_at or e.created_at)[:10] }}</span>
+                {% if e.source_pr_number %}
+                <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
+                {% endif %}
               </div>
               <h4 class="entry-title">{{ e.title }}</h4>
               <p class="entry-body">{{ e.body }}</p>
@@ -49,89 +74,121 @@
                 <span class="dismissed-label">Yoksayıldı</span>
                 <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yeniden Yayınla</button>
                 {% endif %}
+                <button class="btn-action btn-delete" onclick="deleteEntry('{{ e.id }}')">Sil</button>
               </div>
             </div>
             {% endfor %}
           </div>
           {% else %}
           <div class="empty-state">
-            <p>Henüz işlenmiş bir commit veya PR bulunmuyor. GitHub Webhook bağlandığında gelen olaylar otomatik taslağa dönüşecektir.</p>
+            <p>Henüz işlenmiş bir commit veya PR bulunmuyor.</p>
+            <p class="text-sm text-muted">GitHub Webhook bağlandığında gelen hareketler otomatik algılanıp burada listelenecektir. İsterseniz "Yeni Sürüm Notu" butonuyla elle de kayıt ekleyebilirsiniz.</p>
           </div>
           {% endif %}
         </div>
       </div>
     </div>
 
+    <!-- Side Column: Projects & Integrations -->
     <div class="side-column">
       <div class="card">
         <div class="card-header">
-          <h3>Kayıtlı Projeler</h3>
+          <h3>Bağlı Repolar & Projeler</h3>
+          <span class="badge">{{ projects | length }}</span>
         </div>
         <div class="card-body">
           {% if projects %}
           <ul class="side-projects-list">
             {% for p in projects %}
-            <li class="side-project-item">
+            <li class="side-project-item" id="project-card-{{ p.id }}">
               <div class="side-project-title">
                 <span class="color-dot" style="background-color: {{ p.brand_color }}"></span>
                 <strong>{{ p.name }}</strong>
               </div>
-              <small class="text-muted">{{ p.github_repo_full_name }}</small>
+              <small class="repo-tag">{{ p.github_repo_full_name }}</small>
+              
               <div class="side-project-badges">
-                <span class="mode-badge" title="Çalışma Modu">{{ p.parse_mode }}</span>
-                <span class="mode-badge" title="Hedef Kitle">{{ p.audience }}</span>
+                <span class="mode-badge" title="Çalışma Modu">
+                  {% if p.parse_mode == "ai_editorial" %}AI Editoryal
+                  {% elif p.parse_mode == "conventional" %}Conventional
+                  {% elif p.parse_mode == "pr_centric" %}PR Odaklı
+                  {% else %}Ham Git{% endif %}
+                </span>
+                <span class="mode-badge" title="Hedef Kitle">
+                  {% if p.audience == "developer" %}Geliştirici{% else %}Son Kullanıcı{% endif %}
+                </span>
               </div>
+
               <div class="side-project-actions">
-                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Görüntüle</a>
+                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Sayfa</a>
                 <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown</a>
                 <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS</a>
                 <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+              </div>
+
+              <div class="side-project-controls">
+                <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}')">Ayarlar</button>
+                <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
               </div>
             </li>
             {% endfor %}
           </ul>
           {% else %}
-          <p class="text-muted">Henüz kayıtlı bir projeniz yok. Üstteki "Yeni Proje Ekle" butonunu kullanabilirsiniz.</p>
+          <div class="empty-state-side">
+            <p>Henüz kayıtlı bir projeniz yok.</p>
+            <button class="btn btn-primary btn-sm btn-block" onclick="toggleModal('project-modal')">İlk Repoyu Ekle</button>
+          </div>
           {% endif %}
         </div>
       </div>
 
+      <!-- GitHub Webhook Info Card -->
       <div class="card webhook-helper-card">
         <div class="card-header">
-          <h3>GitHub Webhook Bilgileri</h3>
+          <h3>GitHub Webhook Kurulumu</h3>
         </div>
         <div class="card-body">
-          <p class="text-sm">GitHub reponuzun <strong>Settings &rarr; Webhooks</strong> sayfasına ekleyin:</p>
+          <p class="text-sm">GitHub deponuzun <strong>Settings &rarr; Webhooks &rarr; Add webhook</strong> sayfasına girin:</p>
+          
           <div class="code-box">
-            <span class="code-label">Payload URL:</span>
+            <div class="code-box-header">
+              <span class="code-label">Payload URL:</span>
+              <button class="copy-tiny-btn" onclick="copyText('{{ app_url }}/api/v1/webhook', 'Webhook URL')">Kopyala</button>
+            </div>
             <code>{{ app_url }}/api/v1/webhook</code>
           </div>
+
           <div class="code-box">
-            <span class="code-label">Content type:</span>
+            <div class="code-box-header">
+              <span class="code-label">Content type:</span>
+              <button class="copy-tiny-btn" onclick="copyText('application/json', 'Content type')">Kopyala</button>
+            </div>
             <code>application/json</code>
           </div>
+
           <div class="code-box">
             <span class="code-label">Secret:</span>
-            <code>.env içindeki GITHUB_WEBHOOK_SECRET</code>
+            <p class="text-xs text-subtle">Sunucu .env dosyanızdaki <code>GITHUB_WEBHOOK_SECRET</code> değeri.</p>
           </div>
-          <p class="text-sm">Events: <strong>Pushes</strong> ve <strong>Pull requests</strong> seçeneklerini işaretleyin.</p>
+
+          <p class="text-sm">Tetiklenecek Olaylar (Events): <strong>Pushes</strong> ve <strong>Pull requests</strong> kutucuklarını işaretleyin.</p>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Yeni Proje Modalı -->
+<!-- Modal 1: Yeni Proje Ekle -->
 <div id="project-modal" class="modal" style="display:none;">
   <div class="modal-backdrop" onclick="toggleModal('project-modal')"></div>
   <div class="modal-content">
     <div class="modal-header">
-      <h3>Yeni Proje Ekle</h3>
+      <h3>Yeni Proje / Repo Bağla</h3>
       <button class="close-btn" onclick="toggleModal('project-modal')" aria-label="Kapat">&times;</button>
     </div>
     <form id="create-project-form" onsubmit="submitNewProject(event)">
       <div class="form-group">
-        <label for="repo_name">GitHub Repo (Owner/Repo)</label>
+        <label for="repo_name">GitHub Deposu (KullanıcıAdı/Depo)</label>
         <input type="text" id="repo_name" name="repo_name" placeholder="ör. dixtuel/commit-gunlugu" required class="input-text">
       </div>
       <div class="form-group">
@@ -139,24 +196,24 @@
         <input type="text" id="proj_name" name="proj_name" placeholder="ör. Commit Günlüğü" required class="input-text">
       </div>
       <div class="form-group">
-        <label for="parse_mode">Çalışma Modu (Ayrıştırma Motoru)</label>
+        <label for="parse_mode">Çalışma Modu (Dönüştürme Motoru)</label>
         <select id="parse_mode" name="parse_mode" class="input-select">
-          <option value="ai_editorial" selected>AI Editoryal (LLM Destekli Müşteri Bülteni)</option>
-          <option value="conventional">Conventional Commits (git-cliff / Angular Regex)</option>
-          <option value="pr_centric">PR Odaklı (release-drafter Etiket &amp; Başlıkları)</option>
-          <option value="raw_git">Ham Git Log (auto-changelog Commit Listesi)</option>
+          <option value="ai_editorial" selected>AI Editoryal (Kullanıcı Odaklı Akıcı Bülten)</option>
+          <option value="conventional">Conventional Commits (feat, fix, perf kuralları)</option>
+          <option value="pr_centric">PR Odaklı (Pull Request başlık ve etiketleri)</option>
+          <option value="raw_git">Doğrudan Git (Ham commit listesi)</option>
         </select>
       </div>
       <div class="form-group">
-        <label for="audience">Hedef Kitle Düzeyi</label>
+        <label for="audience">Hedef Kitle Seviyesi</label>
         <select id="audience" name="audience" class="input-select">
-          <option value="end_user" selected>Son Kullanıcı (Sade, hash'siz bülten)</option>
-          <option value="developer">Geliştirici (Commit SHA ve PR bağlantılı teknik döküm)</option>
+          <option value="end_user" selected>Son Kullanıcı (Sade, kod jargonsuz anlatım)</option>
+          <option value="developer">Geliştirici (Commit SHA ve PR referanslı teknik görünüm)</option>
         </select>
       </div>
       <div class="form-group">
-        <label for="brand_color">Marka Rengi</label>
-        <input type="color" id="brand_color" name="brand_color" value="#3b82f6" class="input-color">
+        <label for="brand_color">Marka Vurgu Rengi</label>
+        <input type="color" id="brand_color" name="brand_color" value="#2563eb" class="input-color">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('project-modal')">İptal</button>
@@ -166,17 +223,127 @@
   </div>
 </div>
 
-<!-- KVKK Hesap Silme Modalı -->
+<!-- Modal 2: Proje Ayarlarını Düzenle / Mod Değiştir -->
+<div id="edit-project-modal" class="modal" style="display:none;">
+  <div class="modal-backdrop" onclick="toggleModal('edit-project-modal')"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Proje Ayarları & Mod Seçimi</h3>
+      <button class="close-btn" onclick="toggleModal('edit-project-modal')" aria-label="Kapat">&times;</button>
+    </div>
+    <form id="edit-project-form" onsubmit="submitEditProject(event)">
+      <div class="form-group">
+        <label for="edit_proj_name">Görünen Proje Adı</label>
+        <input type="text" id="edit_proj_name" required class="input-text">
+      </div>
+      <div class="form-group">
+        <label for="edit_parse_mode">Çalışma Modu (Ayrıştırma Motoru)</label>
+        <select id="edit_parse_mode" class="input-select">
+          <option value="ai_editorial">AI Editoryal (Kullanıcı Odaklı Akıcı Bülten)</option>
+          <option value="conventional">Conventional Commits (feat, fix, perf kuralları)</option>
+          <option value="pr_centric">PR Odaklı (Pull Request başlık ve etiketleri)</option>
+          <option value="raw_git">Doğrudan Git (Ham commit listesi)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit_audience">Hedef Kitle Seviyesi</label>
+        <select id="edit_audience" class="input-select">
+          <option value="end_user">Son Kullanıcı (Sade, kod jargonsuz anlatım)</option>
+          <option value="developer">Geliştirici (Commit SHA ve PR referanslı teknik görünüm)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit_brand_color">Marka Vurgu Rengi</label>
+        <input type="color" id="edit_brand_color" class="input-color">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="toggleModal('edit-project-modal')">İptal</button>
+        <button type="submit" class="btn btn-primary">Değişiklikleri Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal 3: Projeyi Sil Onayı -->
+<div id="delete-project-modal" class="modal" style="display:none;">
+  <div class="modal-backdrop" onclick="toggleModal('delete-project-modal')"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 style="color: var(--danger);">Projeyi Sil</h3>
+      <button class="close-btn" onclick="toggleModal('delete-project-modal')" aria-label="Kapat">&times;</button>
+    </div>
+    <div style="margin-bottom: 1.25rem;">
+      <p class="text-sm">
+        <strong id="delete_project_name_label">Bu projeyi</strong> ve ona ait tüm sürüm notlarını, taslakları ve webhook geçmişini silmek istediğinize emin misiniz?
+      </p>
+      <p class="text-xs text-subtle" style="margin-top: 0.5rem;">Bu işlem geri alınamaz. Projeye bağlı web widget'ı ve genel sayfa anında yayından kaldırılır.</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="toggleModal('delete-project-modal')">Vazgeç</button>
+      <button type="button" class="btn btn-danger" onclick="confirmDeleteProject()">Evet, Projeyi Sil</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 4: Manuel Sürüm Notu Ekle -->
+<div id="manual-entry-modal" class="modal" style="display:none;">
+  <div class="modal-backdrop" onclick="toggleModal('manual-entry-modal')"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yeni Sürüm Notu Ekle</h3>
+      <button class="close-btn" onclick="toggleModal('manual-entry-modal')" aria-label="Kapat">&times;</button>
+    </div>
+    <form id="manual-entry-form" onsubmit="submitManualEntry(event)">
+      <div class="form-group">
+        <label for="entry_project_id">Proje Seçin</label>
+        <select id="entry_project_id" required class="input-select">
+          {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.name }} ({{ p.github_repo_full_name }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="entry_category">Kategori</label>
+        <select id="entry_category" required class="input-select">
+          <option value="NEW" selected>Yeni Özellik (NEW)</option>
+          <option value="FIX">Hata Düzeltme (FIX)</option>
+          <option value="IMPROVEMENT">İyileştirme &amp; Performans (IMPROVEMENT)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="entry_title">Başlık</label>
+        <input type="text" id="entry_title" required class="input-text" placeholder="ör. Hızlı Klavye Gezintisi ve Arama">
+      </div>
+      <div class="form-group">
+        <label for="entry_body">Açıklama</label>
+        <textarea id="entry_body" required class="input-text" rows="4" placeholder="Kullanıcılarınızın anlayacağı dilde açıklama yazın..."></textarea>
+      </div>
+      <div class="form-group">
+        <label for="entry_status">Yayım Durumu</label>
+        <select id="entry_status" class="input-select">
+          <option value="DRAFT" selected>Taslak Olarak Kaydet</option>
+          <option value="PUBLISHED">Doğrudan Yayına Al</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="toggleModal('manual-entry-modal')">İptal</button>
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal 5: KVKK Hesap Silme Modalı -->
 <div id="delete-account-modal" class="modal" style="display:none;">
   <div class="modal-backdrop" onclick="toggleModal('delete-account-modal')"></div>
   <div class="modal-content">
     <div class="modal-header">
-      <h3 style="color: var(--danger);">Hesabı ve Verileri Kalıcı Olarak Sil</h3>
+      <h3 style="color: var(--danger);">Hesabı ve Tüm Verileri Kalıcı Olarak Sil</h3>
       <button class="close-btn" onclick="toggleModal('delete-account-modal')" aria-label="Kapat">&times;</button>
     </div>
     <form method="POST" action="/api/user/delete-account">
       <p class="text-sm" style="margin-bottom: 14px;">
-        Hesabınızı sildiğinizde size ait tüm projeler, sürüm günlüğü kayıtları ve hesap bilgileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
+        Hesabınızı sildiğinizde tüm projeleriniz, sürüm notlarınız ve üyelik verileriniz kalıcı olarak imha edilir.
       </p>
       <div class="form-group">
         <label for="del_pwd">Mevcut Şifreniz</label>
@@ -188,7 +355,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Vazgeç</button>
-        <button type="submit" class="btn btn-primary btn-danger">Kalıcı Olarak İmha Et</button>
+        <button type="submit" class="btn btn-danger">Kalıcı Olarak İmha Et</button>
       </div>
     </form>
   </div>
