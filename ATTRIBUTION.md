@@ -7,9 +7,10 @@ Bu belge, **Commit Günlüğü** projesinde (`commit-gunlugu`) kullanılan tüm 
 ## 1. Mimari İlhamlar ve Tasarım Referansları
 
 - **Conventional Commits 1.0.0:** Sürüm günlüğü kategorilendirme ve deterministik kural motoru Conventional Commits (`feat:`, `fix:`, `perf:`, `refactor:`) spesifikasyonuna dayanır.
-- **Mikoshi AI (VDS Altyapısı):** KVKK uyumlu hesap silme, imha ledger'ı (`erasure_ledger`) ve opsiyonel bulut yedeğinden kurtarma sonrasında silinmiş hesapların dirilmesini önleyen restore-hook mimarisi, ayrıca yerel SMTP aktarıcısı üzerinden şifre sıfırlama e-postası gönderim deseni Mikoshi AI'ın altyapı standartlarından uyarlanmıştır (bu proje kendi altyapı kimlik bilgilerini içermez, uyarlanan yalnızca mimari desendir).
-- **randomservice (Rust / Axum 0.7):** Sub-millisecond asenkron webhook karşılama, Leaky-Bucket IP hız kısıtlaması (`tower_governor`) ve 3 kademeli (NVIDIA NIM &rarr; Gateway &rarr; Deterministik) yapay zeka fallback zinciri `randomservice` mimarisinden esinlenilmiştir.
-- **GitHub Webhook Security Best Practices:** Sabit zamanlı HMAC-SHA256 imza doğrulaması ve `X-GitHub-Delivery` benzersizlik kontrolü GitHub resmi dokümantasyon standartlarına uygundur.
+- **Mikoshi AI (VDS Altyapısı):** KVKK uyumlu hesap silme, imha ledger'ı (`erasure_ledger`) ve sistem yedeğinden kurtarma sonrasında silinmiş hesapların dirilmesini önleyen restore-hook mimarisi; yerel SMTP aktarıcısı üzerinden şifre sıfırlama e-postası gönderim deseni ve AES-256-GCM kör indeksli (blind index) at-rest şifreleme deseni Mikoshi AI'ın altyapı standartlarından uyarlanmıştır (bu proje kendi altyapı kimlik bilgilerini içermez, uyarlanan yalnızca mimari desendir).
+- **randomservice (Rust / Axum 0.7):** Sub-millisecond asenkron webhook karşılama, Leaky-Bucket IP hız kısıtlaması (`tower_governor`), `identity-guard` anti-harvesting e-posta/isim taranma koruması ve 3 kademeli (NVIDIA NIM &rarr; Deterministik kural motoru) yapay zeka fallback zinciri `randomservice` mimarisinden esinlenilmiştir.
+- **GitHub Webhook & Multi-Tenant Güvenlik Standartları:** Her proje için bağımsız üretilen ve at-rest şifrelenen Webhook Secret (`whsec_...`) anahtarları, sabit zamanlı (`subtle::ConstantTimeEq`) HMAC-SHA256 imza doğrulaması; `push`, `pull_request`, `commit_comment` ve `release` olaylarının tam asenkron tokio iş parçacıklarında karşılanması GitHub resmi dokümantasyon standartlarına uygundur.
+- **GDPR / KVKK Uyumlu Subnet Anonimleştirme:** İstemci IP adreslerinin tekil cihaz/kişi takibini önleyecek şekilde subnet düzeyinde (/24 IPv4, /48 IPv6) kaydedilmesi ve loglarda kişisel tanımlayıcı bilgilerin (PII) `mask_email` ile filtrelenmesi uluslararası veri koruma standartlarına dayanır.
 
 ---
 

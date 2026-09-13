@@ -116,8 +116,8 @@ struct Message {
 impl LlmFallbackEngine {
     pub fn new(config: Config) -> Self {
         let http = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(35))
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(12))
             .build()
             .unwrap_or_default();
 

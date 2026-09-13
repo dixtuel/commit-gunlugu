@@ -455,75 +455,97 @@ pub async fn sync_github_commits_handler(
         AppError::Internal("GitHub geçerli bir commit listesi döndürmedi".to_string())
     })?;
 
-    let mut imported = 0;
-    // En eskiden yeniye doğru sırayla işle
+    // Henüz veritabanında olmayan commit'leri filtrele
+    let mut new_commits = Vec::new();
     for c in commits.iter().rev() {
         let sha = match c.get("sha").and_then(|s| s.as_str()) {
             Some(s) => s,
             None => continue,
         };
 
-        if crate::db::commit_sha_exists(&state.db, &project.id, sha).await? {
-            continue;
+        if !crate::db::commit_sha_exists(&state.db, &project.id, sha).await? {
+            new_commits.push(c.clone());
         }
-
-        let message = c
-            .get("commit")
-            .and_then(|cm| cm.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("");
-
-        let author_name = c
-            .get("author")
-            .and_then(|a| a.get("login"))
-            .and_then(|l| l.as_str())
-            .or_else(|| {
-                c.get("commit")
-                    .and_then(|cm| cm.get("author"))
-                    .and_then(|ca| ca.get("name"))
-                    .and_then(|n| n.as_str())
-            });
-
-        let first_line = message.lines().next().unwrap_or(message);
-        let commit_messages = vec![first_line.to_string()];
-        let commit_shas = vec![sha.to_string()];
-
-        let draft = match state.llm.summarize_for_project(
-            &project.parse_mode,
-            None,
-            None,
-            &commit_messages,
-            &commit_shas,
-            &[],
-        ).await {
-            Some(d) => d,
-            None => continue,
-        };
-
-        let entry = crate::db::models::Entry {
-            id: Uuid::new_v4().to_string(),
-            project_id: project.id.clone(),
-            category: draft.category,
-            title: draft.title,
-            body: draft.body,
-            status: "DRAFT".to_string(),
-            ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
-            source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
-            source_pr_number: None,
-            author_username: author_name.map(crate::sanitizer::sanitize_text),
-            published_at: None,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        };
-
-        crate::db::insert_entry(&state.db, &entry).await?;
-        imported += 1;
     }
+
+    if new_commits.is_empty() {
+        return Ok(Json(json!({
+            "success": true,
+            "imported_count": 0,
+            "message": "Tüm commit'ler zaten güncel. Yeni aktarılacak commit bulunamadı."
+        })));
+    }
+
+    let count = new_commits.len();
+    let state_clone = state.clone();
+    let project_clone = project.clone();
+
+    // Arka planda AI özetleme ve kayıt yürüt (HTTP bağlantısını bekletme ve timeout önleme)
+    tokio::spawn(async move {
+        for c in new_commits {
+            let sha = match c.get("sha").and_then(|s| s.as_str()) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let message = c
+                .get("commit")
+                .and_then(|cm| cm.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("");
+
+            let author_name = c
+                .get("author")
+                .and_then(|a| a.get("login"))
+                .and_then(|l| l.as_str())
+                .or_else(|| {
+                    c.get("commit")
+                        .and_then(|cm| cm.get("author"))
+                        .and_then(|ca| ca.get("name"))
+                        .and_then(|n| n.as_str())
+                });
+
+            let first_line = message.lines().next().unwrap_or(message);
+            let commit_messages = vec![first_line.to_string()];
+            let commit_shas = vec![sha.to_string()];
+
+            let draft = match state_clone.llm.summarize_for_project(
+                &project_clone.parse_mode,
+                None,
+                None,
+                &commit_messages,
+                &commit_shas,
+                &[],
+            ).await {
+                Some(d) => d,
+                None => continue,
+            };
+
+            let entry = crate::db::models::Entry {
+                id: Uuid::new_v4().to_string(),
+                project_id: project_clone.id.clone(),
+                category: draft.category,
+                title: draft.title,
+                body: draft.body,
+                status: "PUBLISHED".to_string(),
+                ai_generated: if project_clone.parse_mode == "ai_editorial" { 1 } else { 0 },
+                source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
+                source_pr_number: None,
+                author_username: author_name.map(crate::sanitizer::sanitize_text),
+                published_at: Some(chrono::Utc::now().to_rfc3339()),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            let _ = crate::db::insert_entry(&state_clone.db, &entry).await;
+            tracing::info!("Arka plan GitHub commit sürüm notu yayına alındı: {}", entry.title);
+        }
+    });
 
     Ok(Json(json!({
         "success": true,
-        "imported_count": imported,
-        "message": format!("{} yeni commit içe aktarıldı ve taslak olarak eklendi.", imported)
+        "imported_count": count,
+        "message": format!("{} yeni commit bulundu! Sürüm notları arka planda hazırlanıp yayına alınıyor...", count)
     })))
 }
 

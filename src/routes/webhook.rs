@@ -238,18 +238,18 @@ async fn process_event_background(
                 category: draft.category,
                 title: draft.title,
                 body: draft.body,
-                status: "DRAFT".to_string(),
+                status: "PUBLISHED".to_string(),
                 ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
                 source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
                 source_pr_number: None,
                 author_username: primary_author,
-                published_at: None,
+                published_at: Some(chrono::Utc::now().to_rfc3339()),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
             insert_entry(&state.db, &entry).await?;
-            tracing::info!("Yeni push changelog taslağı eklendi (mod: {}): {}", project.parse_mode, entry.title);
+            tracing::info!("Yeni push sürüm notu otomatik yayına alındı (mod: {}): {}", project.parse_mode, entry.title);
         }
         "pull_request" => {
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
@@ -326,18 +326,18 @@ async fn process_event_background(
                 category: draft.category,
                 title: draft.title,
                 body: draft.body,
-                status: "DRAFT".to_string(),
+                status: "PUBLISHED".to_string(),
                 ai_generated: 1,
                 source_commit_shas: "[]".to_string(),
                 source_pr_number: pr_number,
                 author_username: Some(sanitize_author(None, author)),
-                published_at: None,
+                published_at: Some(chrono::Utc::now().to_rfc3339()),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
             insert_entry(&state.db, &entry).await?;
-            tracing::info!("Yeni PR changelog taslağı eklendi: {}", entry.title);
+            tracing::info!("Yeni PR sürüm notu otomatik yayına alındı: {}", entry.title);
         }
         "commit_comment" => {
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
@@ -397,19 +397,19 @@ async fn process_event_background(
                 category: draft.category,
                 title: draft.title,
                 body: draft.body,
-                status: "DRAFT".to_string(),
+                status: "PUBLISHED".to_string(),
                 ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
                 source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
                 source_pr_number: None,
                 author_username: Some(sanitize_author(None, author)),
-                published_at: None,
+                published_at: Some(chrono::Utc::now().to_rfc3339()),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
             insert_entry(&state.db, &entry).await?;
             let short_sha = if commit_id.len() >= 7 { &commit_id[..7] } else { commit_id };
-            tracing::info!("Yeni commit_comment changelog taslağı eklendi (commit: {}): {}", short_sha, entry.title);
+            tracing::info!("Yeni commit_comment sürüm notu otomatik yayına alındı (commit: {}): {}", short_sha, entry.title);
         }
         "release" => {
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
