@@ -51,24 +51,24 @@ mod tests {
 
     #[test]
     fn test_sanitize_emails() {
-        let msg = "fix: resolve login bug for user asrin@example.com in auth module";
+        let msg = "fix: resolve login bug for user developer@example.com in auth module";
         let cleaned = sanitize_text(msg);
         assert_eq!(cleaned, "fix: resolve login bug for user [gizlendi] in auth module");
     }
 
     #[test]
     fn test_sanitize_signed_off() {
-        let msg = "feat: add webhook validator\n\nSigned-off-by: Asrın Kılıç <asrin@sely.tr>\nCo-authored-by: Dev <dev@company.com>";
+        let msg = "feat: add webhook validator\n\nSigned-off-by: Jane Doe <jane@example.com>\nCo-authored-by: Dev <dev@company.com>";
         let cleaned = sanitize_text(msg);
-        assert!(!cleaned.contains("asrin@sely.tr"));
+        assert!(!cleaned.contains("jane@example.com"));
         assert!(!cleaned.contains("dev@company.com"));
-        assert!(cleaned.contains("Signed-off-by: Asrın Kılıç"));
+        assert!(cleaned.contains("Signed-off-by: Jane Doe"));
     }
 
     #[test]
     fn test_sanitize_author() {
-        assert_eq!(sanitize_author(None, Some("dixtuel")), "@dixtuel");
-        assert_eq!(sanitize_author(Some("Asrın Kılıç <asrin@sely.tr>"), None), "Asrın Kılıç");
+        assert_eq!(sanitize_author(None, Some("octocat")), "@octocat");
+        assert_eq!(sanitize_author(Some("Jane Doe <jane@example.com>"), None), "Jane Doe");
         assert_eq!(sanitize_author(None, None), "Geliştirici");
     }
 }

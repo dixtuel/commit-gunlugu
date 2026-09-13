@@ -27,7 +27,7 @@ pub async fn send_password_reset_email(config: &Config, to_email: &str, reset_ur
     );
 
     let html_body = format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
@@ -92,12 +92,12 @@ pub async fn send_password_reset_email(config: &Config, to_email: &str, reset_ur
   </tr>
 </table>
 </body>
-</html>"#
+</html>"##
     );
 
     let email = match Message::builder()
         .from(config.smtp_from.parse().unwrap_or_else(|_| {
-            "no-reply@dixtuel.tr".parse().expect("statik adres geçerli olmalı")
+            "no-reply@localhost".parse().expect("statik adres geçerli olmalı")
         }))
         .to(match to_email.parse() {
             Ok(addr) => addr,

@@ -1,17 +1,45 @@
+# Build & Target
 /target
+
+# Veritabanı ve yerel kütükler (SQLite WAL & KVKK erasure ledger)
 /data/*.db
 /data/*.db-shm
 /data/*.db-wal
+/data/*.sqlite*
+/data/*.jsonl
 /data/erasure-ledger.jsonl
+
+# Ortam değişkenleri ve sırlar
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.*
+
+# Site sahiplik doğrulama dosyaları (Google/Bing/Yandex) — hesaba özel, repoya girmez
+static/google*.html
+static/BingSiteAuth.xml
+static/yandex_*.html
+
+# SEO dosyaları — sunucuda/deploy çıktısında tutulur, repoya girmez
+static/sitemap.xml
+static/robots.txt
+
+# AI asistan kılavuzları — yalnız yerel geliştirme notu, public repoya girmez
 CLAUDE.md
 AGENTS.md
 GEMINI.md
-*.pem
-*.key
+
+# IDE & OS
 .DS_Store
-.idea
-.vscode
+.DS_Store?
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
 *.log
+!**/.gitkeep

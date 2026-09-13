@@ -2,7 +2,7 @@
 name = "commit-gunlugu"
 version = "0.1.0"
 edition = "2021"
-authors = ["dixtuel <asrin@sely.tr>"]
+authors = ["dixtuel"]
 description = "High-performance AI changelog engine and GitHub Developer Program integration in Rust"
 license = "MIT"
 

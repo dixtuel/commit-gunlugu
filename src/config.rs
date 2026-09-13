@@ -32,6 +32,15 @@ pub struct Config {
     pub smtp_host: Option<String>,
     pub smtp_port: u16,
     pub smtp_from: String,
+    /// KVKK/Gizlilik Politikası sayfasında "veri sorumlusu" olarak gösterilecek
+    /// isim. Bu proje açık kaynak olduğu için gerçek bir kimlik GÖMÜLMEZ —
+    /// tanımlı değilse jenerik bir placeholder gösterilir; kendi dağıtımınızda
+    /// `.env`'e gerçek ad/unvanınızı yazmanız gerekir.
+    pub legal_entity_name: String,
+    /// (İsteğe bağlı) Veri hakları talepleri için gösterilecek iletişim e-postası.
+    /// Tanımlı değilse yalnızca GitHub Issues bağlantısı gösterilir, gerçek bir
+    /// e-posta adresi public sayfalarda/arama motorlarında ifşa edilmez.
+    pub privacy_contact_email: Option<String>,
 }
 
 impl Config {
@@ -93,6 +102,15 @@ impl Config {
             .unwrap_or(25);
         let smtp_from = env::var("SMTP_FROM").unwrap_or_else(|_| "no-reply@localhost".to_string());
 
+        let legal_entity_name = env::var("LEGAL_ENTITY_NAME")
+            .ok()
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| "Proje Sahibi (kendi bilgilerinizi LEGAL_ENTITY_NAME ile tanımlayın)".to_string());
+
+        let privacy_contact_email = env::var("PRIVACY_CONTACT_EMAIL")
+            .ok()
+            .filter(|e| !e.trim().is_empty());
+
         Self {
             host,
             port,
@@ -109,6 +127,8 @@ impl Config {
             smtp_host,
             smtp_port,
             smtp_from,
+            legal_entity_name,
+            privacy_contact_email,
         }
     }
 }

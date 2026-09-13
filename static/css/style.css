@@ -2207,3 +2207,35 @@ textarea.input-text {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Scraper & Bot Anti-Harvesting Styles */
+.protected-contact-link {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--primary);
+  transition: opacity 0.15s ease;
+}
+
+.protected-contact-link:hover {
+  opacity: 0.85;
+}
+
+.protected-contact-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.protected-name-val {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.bot-decoy {
+  display: none !important;
+  speak: never;
+}
+

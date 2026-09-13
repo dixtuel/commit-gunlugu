@@ -6,19 +6,40 @@ use crate::config::Config;
 use crate::llm::deterministic::{generate_deterministic_entry, EntryDraft};
 use crate::sanitizer::sanitize_text;
 
-const SYSTEM_PROMPT: &str = r#"Sen bir yazılım ürününün son kullanıcılarına yönelik editoryal sürüm günlüğü (changelog) editörüsün.
-Sana git commit mesajları ve/veya bir Pull Request başlığı ve açıklaması verilecek.
-Görevin:
-1. Teknik jargondan ve commit ön eklerinden (feat:, fix:, chore:, merge, refactor vb.) arındırılmış, son kullanıcının değerini anlayacağı TEK bir sürüm notu üretmek.
-2. Kişisel e-posta, iç dosya yolları, commit hash'leri veya hassas verileri asla metne dahil etmemek.
-3. Kategori olarak yalnızca şu üçünden birini seçmek: "NEW" (yeni özellik), "FIX" (hata giderme), "IMPROVEMENT" (iyileştirme/performans).
-4. Kesinlikle yapay emoji (🚀, 🐛, ⚡, ✨ vb.) kullanma. Temiz, sade ve profesyonel bir dil kullan.
-5. Asla uydurma faturalandırma veya kurumsal özelliklerden bahsetme.
-6. Yalnızca aşağıdaki geçerli JSON formatında yanıt dön, başka hiçbir açıklama veya selamlama metni ekleme:
+const SYSTEM_PROMPT: &str = r#"Sen kıdemli bir teknik ürün editörüsün ("Seyir Defteri" editörü). Görevin; ham Git commit mesajlarını ve Pull Request verilerini, yazılım ürününü kullanan son kullanıcılar için anlaşılır, editoryal ve değer odaklı bir sürüm günlüğü (changelog) kaydına dönüştürmektir.
+
+## Temel Kurallar ve Prensipler:
+1. DEĞER ODAKLI ÇEVİRİ:
+   - Geliştirici jargonunu (refactor, dependency bump, regex, query optimization, null check vb.) son kullanıcının doğrudan hissedeceği faydaya dönüştür.
+   - "Ne yapıldı?" yerine "Kullanıcı için ne iyileşti / ne kolaylaştı?" sorusuna odaklan.
+
+2. EDİTORYAL TON ("SEYİR DEFTERİ" FELSEFESİ):
+   - Sade, profesyonel, sakin ve net bir Türkçe kullan.
+   - KESİNLİKLE EMOJİ KULLANMA (🚀, 🐛, ⚡, ✨, 🎉, 🔧 vb. tamamen yasaktır).
+   - Abartılı pazarlama sıfatlarından ("devrim niteliğinde", "mükemmel deneyim") ve uydurma kurumsal özelliklerden kaçın; sadece yapılan işin gerçek etkisini anlat.
+
+3. GİZLİLİK VE VERİ TEMİZLİĞİ:
+   - Commit hash'leri (SHA), dahili dosya yolları (src/...), branch adları, geliştirici adları veya e-posta adreslerini ASLA metne dahil etme.
+
+4. KATEGORİ SEÇİMİ (Yalnızca şu 3 değerden biri):
+   - "NEW": Kullanıcının doğrudan deneyimleyebileceği yeni bir yetenek, sayfa veya fonksiyon.
+   - "FIX": Kullanıcının karşılaştığı bir hatanın, çökmenin veya görsel uyumsuzluğun giderilmesi.
+   - "IMPROVEMENT": Mevcut bir özelliğin hızlandırılması, tasarım/arayüz ergonomisi veya altyapı kararlılığı.
+
+## Çıktı Formatı (JSON Only):
+Yanıtın YALNIZCA geçerli ve parse edilebilir bir JSON nesnesi olmalıdır. Yanıtına markdown kod bloğu (```json), selamlama veya düşünce (reasoning) açıklaması EKLEME.
+
+Örnek Giriş:
+PR Başlığı: fix(checkout): resolve race condition in stripe webhook and null crash on mobile
+Commit Mesajları:
+- fix: check if customer profile exists before order confirmation
+- refactor: optimize database lock during checkout transaction
+
+Örnek JSON Çıktısı:
 {
-  "category": "NEW" | "FIX" | "IMPROVEMENT",
-  "title": "Kısa ve net başlık (en fazla 80 karakter)",
-  "body": "Son kullanıcıya faydasını anlatan 1-2 cümlelik açıklama (en fazla 280 karakter)"
+  "category": "FIX",
+  "title": "Mobil Ödeme Ekranı Kararlılığı",
+  "body": "Mobil cihazlarda sipariş tamamlama sırasında yaşanan kilitlenme ve ödeme onayının gecikmesi sorunu giderildi."
 }"#;
 
 #[derive(Clone)]
@@ -32,34 +53,39 @@ struct ModelProfile {
 
 fn known_profile(name: &str) -> ModelProfile {
     match name {
-        "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
-            name: name.to_string(),
-            temperature: 0.2,
-            top_p: 0.95,
-            max_tokens: 1024,
-            // reasoning_budget=-1 disables budget enforcement on NVIDIA NIM
-            extra: json!({ "reasoning_budget": -1 }),
-        },
         "deepseek-ai/deepseek-v4-flash-0731" => ModelProfile {
             name: name.to_string(),
-            temperature: 0.2,
+            temperature: 1.0,
             top_p: 0.95,
-            max_tokens: 1024,
-            // reasoning_effort="none" disables thinking on DeepSeek
-            extra: json!({ "reasoning_effort": "none" }),
+            max_tokens: 2048,
+            // DeepSeek thinking'i devre dışı bırak: reasoning_effort="none" ve chat_template_kwargs.enable_thinking=false
+            extra: json!({
+                "reasoning_effort": "none",
+                "chat_template_kwargs": { "enable_thinking": false }
+            }),
         },
         "google/gemma-4-31b-it" => ModelProfile {
             name: name.to_string(),
-            temperature: 0.2,
+            temperature: 0.5,
             top_p: 1.0,
-            max_tokens: 1024,
-            // chat_template_kwargs.enable_thinking=false disables thinking on Gemma
-            extra: json!({ "chat_template_kwargs": { "enable_thinking": false } }),
+            max_tokens: 2048,
+            // Gemma thinking'i devre dışı bırak: chat_template_kwargs.enable_thinking=false
+            extra: json!({
+                "chat_template_kwargs": { "enable_thinking": false }
+            }),
+        },
+        "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 1.0,
+            top_p: 0.95,
+            max_tokens: 2048,
+            // reasoning_budget=-1: "Use -1 to disable budget enforcement" (docs.api.nvidia.com).
+            extra: json!({ "reasoning_budget": -1 }),
         },
         other => ModelProfile {
             name: other.to_string(),
-            temperature: 0.2,
-            top_p: 0.95,
+            temperature: 0.7,
+            top_p: 1.0,
             max_tokens: 1024,
             extra: json!({}),
         },
