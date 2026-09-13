@@ -33,9 +33,25 @@ pub async fn get_widget_data(
     State(state): State<AppState>,
     Path(widget_key): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let project = find_project_by_widget_key(&state.db, &widget_key)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Geçersiz widget anahtarı".to_string()))?;
+    let project = if widget_key == "demo" || widget_key == "w_demo" {
+        let p = if let Some(ref demo_key) = state.config.demo_widget_key {
+            find_project_by_widget_key(&state.db, demo_key).await?
+        } else {
+            None
+        };
+        if let Some(proj) = p {
+            proj
+        } else {
+            sqlx::query_as::<_, Project>("SELECT * FROM projects ORDER BY created_at ASC LIMIT 1")
+                .fetch_optional(&state.db)
+                .await?
+                .ok_or_else(|| AppError::NotFound("Demo projesi bulunamadı".to_string()))?
+        }
+    } else {
+        find_project_by_widget_key(&state.db, &widget_key)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Geçersiz widget anahtarı".to_string()))?
+    };
 
     let entries = list_entries_for_project(&state.db, &project.id, true).await?;
 

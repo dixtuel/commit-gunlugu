@@ -45,15 +45,10 @@ pub async fn widget_preview_page(
     State(state): State<AppState>,
     Query(query): Query<WidgetPreviewQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let widget_key = if let Some(k) = query.key.filter(|k| !k.trim().is_empty()) {
-        k
-    } else if let Some(ref demo_key) = state.config.demo_widget_key {
-        demo_key.clone()
+    let (preview_key, snippet_key, is_custom) = if let Some(k) = query.key.filter(|k| !k.trim().is_empty()) {
+        (k.clone(), k, true)
     } else {
-        sqlx::query_scalar::<_, String>("SELECT widget_key FROM projects ORDER BY created_at ASC LIMIT 1")
-            .fetch_optional(&state.db)
-            .await?
-            .unwrap_or_else(|| "w_sample".to_string())
+        ("demo".to_string(), "PROJE_WIDGET_ANAHTARINIZ".to_string(), false)
     };
 
     let tmpl = state
@@ -63,7 +58,9 @@ pub async fn widget_preview_page(
 
     let rendered = tmpl
         .render(context! {
-            widget_key => widget_key,
+            preview_key => preview_key,
+            snippet_key => snippet_key,
+            is_custom => is_custom,
             app_url => state.config.app_url,
         })
         .map_err(|e| AppError::Internal(format!("Şablon render hatası: {}", e)))?;

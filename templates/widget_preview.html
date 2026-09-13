@@ -112,6 +112,15 @@
         </label>
       </div>
 
+      <!-- Proje Widget Anahtarı Girişi -->
+      <div class="space-y-1.5 pt-3 border-t border-slate-100">
+        <div class="flex items-center justify-between">
+          <label for="opt-widget-key" class="text-xs font-bold text-slate-700">Proje Widget Anahtarınız (data-key):</label>
+          <span class="text-[11px] text-slate-400">Kendi proje anahtarınızı yazabilir veya varsayılan bırakabilirsiniz</span>
+        </div>
+        <input type="text" id="opt-widget-key" value="{{ snippet_key }}" oninput="updateGenerator()" placeholder="PROJE_WIDGET_ANAHTARINIZ" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      </div>
+
       <!-- Kod Çıktı Alanı & Kopyalama Butonu -->
       <div class="space-y-2 pt-2">
         <div class="flex items-center justify-between">
@@ -158,7 +167,7 @@
             <span class="text-xs font-bold text-slate-700">Kare / Tek Sürüm (300px)</span>
             <button onclick="copyPredefined('square', 1)" class="text-xs text-emerald-600 font-semibold hover:underline">Kodu Al</button>
           </div>
-          <div class="commit-gunlugu-widget" data-key="{{ widget_key }}" data-layout="square" data-limit="1"></div>
+          <div class="commit-gunlugu-widget" data-key="{{ preview_key | safe }}" data-layout="square" data-limit="1"></div>
         </div>
 
         <!-- Kart 2: Kompakt Mini Kart -->
@@ -167,7 +176,7 @@
             <span class="text-xs font-bold text-slate-700">Kompakt Mini Kart</span>
             <button onclick="copyPredefined('compact', 1)" class="text-xs text-emerald-600 font-semibold hover:underline">Kodu Al</button>
           </div>
-          <div class="commit-gunlugu-widget" data-key="{{ widget_key }}" data-layout="compact" data-limit="1"></div>
+          <div class="commit-gunlugu-widget" data-key="{{ preview_key | safe }}" data-layout="compact" data-limit="1"></div>
         </div>
 
         <!-- Kart 3: Dikey 3 Sürüm Kartı -->
@@ -176,7 +185,7 @@
             <span class="text-xs font-bold text-slate-700">Dikey Liste Kartı (3 Commit)</span>
             <button onclick="copyPredefined('card', 3)" class="text-xs text-emerald-600 font-semibold hover:underline">Kodu Al</button>
           </div>
-          <div class="commit-gunlugu-widget" data-key="{{ widget_key }}" data-layout="card" data-limit="3"></div>
+          <div class="commit-gunlugu-widget" data-key="{{ preview_key | safe }}" data-layout="card" data-limit="3"></div>
         </div>
 
       </div>
@@ -197,7 +206,7 @@
 
   <script>
     const APP_URL = "{{ app_url | safe }}";
-    const WIDGET_KEY = "{{ widget_key | safe }}";
+    const PREVIEW_KEY = "{{ preview_key | safe }}";
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -210,12 +219,19 @@
       }, 2200);
     }
 
+    function getSelectedWidgetKey() {
+      const el = document.getElementById('opt-widget-key');
+      const val = el ? el.value.trim() : '';
+      return val || 'PROJE_WIDGET_ANAHTARINIZ';
+    }
+
     function generateSnippet(layout, limit, width, theme, showDesc, showDate, showPill) {
+      const key = getSelectedWidgetKey();
       if (layout === 'badge') {
-        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script src="${APP_URL}/widget.js" data-key="${WIDGET_KEY}" async><\/script>`;
+        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script src="${APP_URL}/widget.js" data-key="${key}" async><\/script>`;
       }
 
-      let attrs = [`class="commit-gunlugu-widget"`, `data-key="${WIDGET_KEY}"`, `data-layout="${layout}"`];
+      let attrs = [`class="commit-gunlugu-widget"`, `data-key="${key}"`, `data-layout="${layout}"`];
       if (limit) attrs.push(`data-limit="${limit}"`);
       if (width && width !== '100%') attrs.push(`data-width="${width}"`);
       if (theme && theme !== 'auto') attrs.push(`data-theme="${theme}"`);
@@ -247,7 +263,7 @@
       } else {
         const widgetEl = document.createElement('div');
         widgetEl.className = 'commit-gunlugu-widget';
-        widgetEl.setAttribute('data-key', WIDGET_KEY);
+        widgetEl.setAttribute('data-key', PREVIEW_KEY);
         widgetEl.setAttribute('data-layout', layout);
         widgetEl.setAttribute('data-limit', limit);
         widgetEl.setAttribute('data-width', width);
@@ -293,6 +309,6 @@
   </script>
 
   <!-- Widget Çalıştırıcı Betik (Doğrudan dinamik no-cache /widget.js rotası) -->
-  <script src="/widget.js" data-key="{{ widget_key }}" data-mode="badge"></script>
+  <script src="/widget.js" data-key="{{ preview_key | safe }}" data-mode="badge"></script>
 </body>
 </html>
