@@ -339,6 +339,117 @@ async fn process_event_background(
             insert_entry(&state.db, &entry).await?;
             tracing::info!("Yeni PR changelog taslağı eklendi: {}", entry.title);
         }
+        "commit_comment" => {
+            let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
+            if action != "created" {
+                return Ok(());
+            }
+
+            let comment = payload.get("comment");
+            let body = comment.and_then(|c| c.get("body")).and_then(|b| b.as_str()).unwrap_or("").trim();
+            let commit_id = comment.and_then(|c| c.get("commit_id")).and_then(|id| id.as_str()).unwrap_or("");
+            let author = comment.and_then(|c| c.get("user")).and_then(|u| u.get("login")).and_then(|l| l.as_str());
+
+            if body.is_empty() {
+                return Ok(());
+            }
+
+            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
+                crate::db::models::Project {
+                    id: project_id.clone(),
+                    user_id: None,
+                    github_repo_full_name: "bilinmeyen/repo".to_string(),
+                    name: "Proje".to_string(),
+                    slug: "proje".to_string(),
+                    widget_key: "w_def".to_string(),
+                    brand_name: None,
+                    brand_color: "#10b981".to_string(),
+                    brand_logo_url: None,
+                    webhook_secret: "".to_string(),
+                    parse_mode: "ai_editorial".to_string(),
+                    audience: "end_user".to_string(),
+                    template_style: "standard".to_string(),
+                    is_private: 0,
+                    custom_github_token: None,
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                }
+            });
+
+            let commit_shas = if !commit_id.is_empty() { vec![commit_id.to_string()] } else { vec![] };
+            let commit_messages = vec![body.to_string()];
+
+            let draft = match state.llm.summarize_for_project(
+                &project.parse_mode,
+                None,
+                Some(body),
+                &commit_messages,
+                &commit_shas,
+                &[],
+            ).await {
+                Some(d) => d,
+                None => return Ok(()),
+            };
+
+            let entry = Entry {
+                id: Uuid::new_v4().to_string(),
+                project_id,
+                category: draft.category,
+                title: draft.title,
+                body: draft.body,
+                status: "DRAFT".to_string(),
+                ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
+                source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
+                source_pr_number: None,
+                author_username: Some(sanitize_author(None, author)),
+                published_at: None,
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            insert_entry(&state.db, &entry).await?;
+            let short_sha = if commit_id.len() >= 7 { &commit_id[..7] } else { commit_id };
+            tracing::info!("Yeni commit_comment changelog taslağı eklendi (commit: {}): {}", short_sha, entry.title);
+        }
+        "release" => {
+            let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
+            if action != "published" {
+                return Ok(());
+            }
+
+            let release = payload.get("release");
+            let tag_name = release.and_then(|r| r.get("tag_name")).and_then(|t| t.as_str()).unwrap_or("");
+            let name = release.and_then(|r| r.get("name")).and_then(|n| n.as_str()).unwrap_or(tag_name);
+            let body = release.and_then(|r| r.get("body")).and_then(|b| b.as_str()).unwrap_or("").trim();
+            let author = release.and_then(|r| r.get("author")).and_then(|u| u.get("login")).and_then(|l| l.as_str());
+
+            let title = if !name.is_empty() {
+                name.to_string()
+            } else if !tag_name.is_empty() {
+                format!("Sürüm {}", tag_name)
+            } else {
+                "Yeni Sürüm Yayında".to_string()
+            };
+
+            let entry = Entry {
+                id: Uuid::new_v4().to_string(),
+                project_id,
+                category: "NEW".to_string(),
+                title,
+                body: if body.is_empty() { "Bu sürüm için detaylı not eklenmedi.".to_string() } else { body.to_string() },
+                status: "PUBLISHED".to_string(), // Resmi GitHub Release yayınlandığı için doğrudan PUBLISHED olarak açılır
+                ai_generated: 0,
+                source_commit_shas: "[]".to_string(),
+                source_pr_number: None,
+                author_username: Some(sanitize_author(None, author)),
+                published_at: Some(chrono::Utc::now().to_rfc3339()),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            insert_entry(&state.db, &entry).await?;
+            tracing::info!("Resmi GitHub Release sürüm notu eklendi: {}", entry.title);
+        }
         _ => {}
     }
 
