@@ -5,20 +5,33 @@
 <section class="hero-section">
   <div class="container hero-content">
     <div class="hero-badge">
-      <span class="badge-dot"></span> Sürüm Günlüğü Otomasyonu
+      <span class="badge-dot"></span>
+      <span>Açık Kaynak &bull; Otomatik Sürüm Günlüğü</span>
     </div>
-    <h1 class="hero-title">Commit'lerinizi Müşterilerinizin Seveceği Sürüm Notlarına Dönüştürün</h1>
+    <h1 class="hero-title">Kod güncellemelerinizi herkesin anlayacağı duyurulara dönüştürün</h1>
     <p class="hero-subtitle">
-      GitHub deponuza kod gönderildiği anda teknik commit ve PR hareketlerinizi analiz eder, 
-      anlaşılır ve şık sürüm günlükleri oluşturur. Sıfır konfigürasyon, hafif widget ve tam gizlilik.
+      GitHub deponuza gelen commit ve PR hareketlerini analiz eder; karmaşık teknik terimleri temizleyerek 
+      kullanıcılarınızın ilgisini çekecek şık ve anlaşılır bir sürüm günlüğü (changelog) üretir.
     </p>
     <div class="hero-cta">
-      <a href="/register" class="btn btn-primary btn-lg">Ücretsiz Başlayın &rarr;</a>
+      <a href="/register" class="btn btn-primary btn-lg">Ücretsiz Başlayın</a>
       <a href="#how-it-works" class="btn btn-secondary btn-lg">Nasıl Çalışır?</a>
     </div>
 
-    <!-- Product Preview Showcase -->
+    <!-- Live Preview Showcase (Interactive Before / After Transformation) -->
     <div class="preview-showcase">
+      <div class="preview-tabs-nav" role="tablist" aria-label="Canlı Dönüşüm Örnekleri">
+        <button type="button" class="preview-tab-btn active" data-example="0" onclick="switchPreviewExample(0)">
+          <span>Arama Kısayolu</span>
+        </button>
+        <button type="button" class="preview-tab-btn" data-example="1" onclick="switchPreviewExample(1)">
+          <span>Oturum Düzeltmesi</span>
+        </button>
+        <button type="button" class="preview-tab-btn" data-example="2" onclick="switchPreviewExample(2)">
+          <span>Sayfa Hızı</span>
+        </button>
+      </div>
+
       <div class="preview-window">
         <div class="window-header">
           <div class="window-dots">
@@ -26,31 +39,53 @@
             <span class="dot yellow"></span>
             <span class="dot green"></span>
           </div>
-          <div class="window-title">Canlı Dönüşüm Önizlemesi</div>
+          <div class="window-title">Canlı Dönüşüm: Git Push &rarr; Sürüm Notu</div>
         </div>
+
         <div class="window-body">
           <div class="preview-split">
-            <div class="preview-col commit-box">
-              <div class="col-label">GitHub'dan Gelen Commit</div>
-              <div class="code-snippet">
-                <code><span class="git-tag">feat(checkout):</span> add Shopier gateway and multi-currency checkout (#84)</code>
+            <!-- Left: What developer pushes -->
+            <div class="preview-col terminal-col">
+              <div class="col-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+                <span>Deponuza Gönderilen Kod</span>
+              </div>
+              <div class="code-snippet" id="demo-terminal">
+                <span class="code-dim">$ git commit -m</span> <span class="code-green">"feat(search): add instant keyboard navigation with '/' shortcut"</span><br>
+                <span class="code-dim">$ git push origin main</span><br>
+                <span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>
               </div>
               <div class="commit-meta">
-                <span>commit <code>4e870ca</code></span>
-                <span>&bull;</span>
-                <span>main dalına birleştirildi</span>
+                <span>Dal: <code id="demo-branch">main</code></span>
+                <span>Durum: <code id="demo-status">Yayına Hazır</code></span>
               </div>
             </div>
-            <div class="preview-arrow">&rarr;</div>
-            <div class="preview-col changelog-box">
-              <div class="col-label">Oluşan Sürüm Notu</div>
-              <div class="result-card">
+
+            <!-- Right: What visitors read -->
+            <div class="preview-col changelog-col">
+              <div class="col-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                <span>Kullanıcılarınızın Gördüğü Sürüm Notu</span>
+              </div>
+              <div class="result-card" id="demo-card">
                 <div class="result-header">
-                  <span class="category-pill pill-new">YENİ</span>
+                  <span class="category-pill pill-new" id="demo-pill">Yeni Özellik</span>
                   <span class="result-date">Bugün</span>
                 </div>
-                <h4>Çoklu Para Birimi ve Güvenli Ödeme Desteği</h4>
-                <p>Müşterileriniz artık farklı para birimleriyle hızlı ve güvenli ödeme yapabilir. Alışveriş akışı optimize edildi.</p>
+                <h4 id="demo-title">Hızlı Klavye Gezintisi ve Arama</h4>
+                <p id="demo-body">Projeleriniz ve güncellemeleriniz arasında artık klavye kısayolları ile anında arama yapabilir, aradığınız sürüme sayfayı kaydırmadan kolayca ulaşabilirsiniz.</p>
+                <div class="result-footer">
+                  <span class="badge-mode">Otomatik Yayında</span>
+                </div>
               </div>
             </div>
           </div>
@@ -60,188 +95,310 @@
   </div>
 </section>
 
-<!-- Features Grid -->
-<section class="section" id="features">
+<!-- How It Works (3 Clear Steps) -->
+<section class="section section-alt" id="how-it-works">
   <div class="container">
     <div class="section-header text-center">
-      <h2 class="section-title">Neden Commit Günlüğü?</h2>
-      <p class="section-subtitle">Geliştiricilerin kod yazmaya, ürün ekiplerinin ise kullanıcılara odaklanmasını sağlayan modern çözümler.</p>
-    </div>
-
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🧠</div>
-        <h3>Akıllı ve Anlaşılır Özetler</h3>
-        <p>Teknik jargonu temizler; son kullanıcıların anlayacağı, değer odaklı ve aktif fiilli Türkçe veya İngilizce sürüm notları üretir.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Anında Webhook Yanıtı</h3>
-        <p>GitHub webhook isteklerini milisaniyeler içinde işler, kuyruğa alır ve arka planda güvenle sürüm taslağınızı hazırlar.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">📦</div>
-        <h3>Gömülebilir Hafif Widget</h3>
-        <p>Herhangi bir web sitesine veya SaaS paneline tek satır script ile eklenir. Shadow DOM sayesinde sitenizin tasarımını asla bozmaz.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🛡️</div>
-        <h3>Tam Gizlilik ve KVKK</h3>
-        <p>Geliştirici e-postaları maskelenir, kişisel veriler dışarı sızdırılmaz. Unutulma hakkı kapsamında kalıcı hesap imha sicili sunar.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">📡</div>
-        <h3>Çoklu Dışa Aktarma</h3>
-        <p>Sürüm notlarınızı yalnızca web'de değil; standart Markdown (.md), RSS 2.0 XML akışı ve JSON Feed API olarak da kullanabilirsiniz.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🔒</div>
-        <h3>Doğrulanmış Posta Sunucusu</h3>
-        <p>Kayıt esnasında geçerli DNS ve posta sunucusu (MX) kontrolü yapılarak sahte veya geçici adreslerin girişi engellenir.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 4 Product Modes -->
-<section class="section section-alt" id="modes">
-  <div class="container">
-    <div class="section-header text-center">
-      <h2 class="section-title">İhtiyacınıza Uygun 4 Çalışma Modu</h2>
-      <p class="section-subtitle">Açık kaynak araçların en güçlü yönlerini bir araya getiren esnek ayrıştırma motoru.</p>
-    </div>
-
-    <div class="modes-grid">
-      <div class="mode-card">
-        <div class="mode-header">
-          <span class="mode-tag">Varsayılan</span>
-          <h3>🧠 AI Editoryal Modu</h3>
-        </div>
-        <p>Karmaşık kod commit'lerini müşterilerinizin ilgisini çekecek akıcı sürüm bültenlerine dönüştürür. Kesinti anında kural motoruna düşer.</p>
-      </div>
-
-      <div class="mode-card">
-        <div class="mode-header">
-          <span class="mode-tag tag-code">git-cliff stili</span>
-          <h3>⚡ Conventional Commits</h3>
-        </div>
-        <p>Angular regex standardı: <code>feat:</code>, <code>fix:</code>, <code>perf:</code> kalıplarını sıfır gecikmeyle anında kategorize eder.</p>
-      </div>
-
-      <div class="mode-card">
-        <div class="mode-header">
-          <span class="mode-tag tag-pr">release-drafter stili</span>
-          <h3>🏷️ PR Odaklı Mod</h3>
-        </div>
-        <p>Commit mesajları yerine Pull Request başlıklarını ve etiketlerini (enhancement, bug) temel alarak sürüm notu çıkarır.</p>
-      </div>
-
-      <div class="mode-card">
-        <div class="mode-header">
-          <span class="mode-tag tag-git">auto-changelog stili</span>
-          <h3>📜 Ham Git Log Modu</h3>
-        </div>
-        <p>Geliştirici ekipleri için commit hash'leri, yazar bilgileri ve doğrudan commit başlıklarıyla şeffaf bir git günlüğü sunar.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- How It Works -->
-<section class="section" id="how-it-works">
-  <div class="container">
-    <div class="section-header text-center">
-      <h2 class="section-title">Nasıl Çalışır? 3 Kolay Adım</h2>
-      <p class="section-subtitle">Karmaşık kurulumlar veya karmaşık araçlar olmadan 2 dakika içinde başlayın.</p>
+      <h2 class="section-title">Üç Basit Adımda Yayına Alın</h2>
+      <p class="section-subtitle">Ürününüzün sürüm günlüğünü kurmak yalnızca iki dakikanızı alır.</p>
     </div>
 
     <div class="steps-grid">
       <div class="step-card">
-        <div class="step-number">1</div>
+        <div class="step-badge">01</div>
         <div class="step-body">
-          <h4>Projenizi Ekleyin</h4>
-          <p>Kontrol panelinizden projenize bir ad verin. Size özel Webhook URL'i ve gizli anahtarınız anında üretilsin.</p>
+          <h4>Deponuzu Tanımlayın</h4>
+          <p>Panelinizden projenizin GitHub repo adını girin. Size özel Webhook adresi ve anahtarınız anında üretilsin.</p>
         </div>
       </div>
 
       <div class="step-card">
-        <div class="step-number">2</div>
+        <div class="step-badge">02</div>
         <div class="step-body">
-          <h4>GitHub Webhook'unu Ekleyin</h4>
-          <p>Deponuzun <strong>Settings &rarr; Webhooks</strong> sekmesine üretilen URL'i yapıştırın ve <code>push</code> olayını seçin.</p>
+          <h4>Çalışma Modunuzu Seçin</h4>
+          <p>İster editoryal özet, ister Conventional Commits kurallarıyla teknik detaylar otomatik ve düzenli bültenlere dönüşsün.</p>
         </div>
       </div>
 
       <div class="step-card">
-        <div class="step-number">3</div>
+        <div class="step-badge">03</div>
         <div class="step-body">
-          <h4>Sitenize Gömün veya Paylaşın</h4>
-          <p>Tek satırlık hafif widget kodunu sitenize ekleyin ya da <code>/c/proje-adi</code> genel sayfanızı kullanıcılarınıza duyurun.</p>
+          <h4>Kullanıcılarınıza Duyurun</h4>
+          <p>Web sitenize gömülebilir açılır bildirim widget'ı ekleyin, genel sayfanızı paylaşın veya RSS ile okuyucularınıza ulaştırın.</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Widget Showcase Section -->
-<section class="section section-alt" id="widget">
-  <div class="container widget-showcase-wrap">
-    <div class="widget-text-side">
-      <span class="sub-badge">Sıfır Bağımlılık &bull; &lt;15KB</span>
-      <h2>Web Sitenize Tek Satır Kodla Entegre Edin</h2>
-      <p>
-        Shadow DOM teknolojisi sayesinde sitenizdeki hiçbir CSS stili widget'ı bozmaz, 
-        widget da sitenizi etkilemez. Ziyaretçileriniz için okunmamış bildirim rozeti sunar.
-      </p>
-      <div class="code-copy-box">
-        <code>&lt;script src="{{ app_url }}/static/js/widget.js" data-key="PROJE_KEYINIZ" async&gt;&lt;/script&gt;</code>
-      </div>
-      <div style="margin-top: 1rem;">
-        <a href="/register" class="btn btn-primary">Hemen Kodunuzu Alın &rarr;</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Projects Showcase -->
-<section class="section">
+<!-- 4 Presentation Formats -->
+<section class="section" id="modes">
   <div class="container">
     <div class="section-header text-center">
-      <h2 class="section-title">Kayıtlı Projeler & Sürüm Günlükleri</h2>
-      <p class="section-subtitle">Platformda yayınlanan güncel changelog'lara göz atın.</p>
+      <h2 class="section-title">Hedef Kitlenize Uygun Çalışma Modları</h2>
+      <p class="section-subtitle">Ürününüzün tarzına ve kitlenize en uygun anlatım biçimini seçin.</p>
+    </div>
+
+    <div class="modes-grid">
+      <div class="mode-card">
+        <div class="mode-top">
+          <div class="mode-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </div>
+          <span class="mode-tag">Önerilen</span>
+        </div>
+        <h3>AI Editoryal Özet</h3>
+        <p>Geliştirici jargonunu ayıklar. Müşterilerinizin üründe neyin değiştiğini kolayca anlayacağı sıcak ve akıcı bültenler üretir.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-top">
+          <div class="mode-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          <span class="mode-tag tag-code">Standart</span>
+        </div>
+        <h3>Conventional Commits</h3>
+        <p><code>feat:</code>, <code>fix:</code>, <code>perf:</code> ve <code>refactor:</code> etiketlerini katı kurallarla anında Yeni, Düzeltme ve İyileştirme olarak sınıflandırır.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-top">
+          <div class="mode-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="18" cy="18" r="3"/>
+              <circle cx="6" cy="6" r="3"/>
+              <path d="M18 15V9a6 6 0 0 0-6-6H6"/>
+            </svg>
+          </div>
+          <span class="mode-tag tag-pr">İşbirlikçi</span>
+        </div>
+        <h3>PR Odaklı Mod</h3>
+        <p>Pull Request başlıkları, etiketleri ve birleştirme özetlerinden beslenir. Ekip içi katkıları ve sürüm kapsamını düzenli listeler.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-top">
+          <div class="mode-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="6" y1="3" x2="6" y2="15"/>
+              <circle cx="18" cy="6" r="3"/>
+              <circle cx="6" cy="18" r="3"/>
+              <path d="M18 9a9 9 0 0 1-9 9"/>
+            </svg>
+          </div>
+          <span class="mode-tag tag-raw">Açık Kaynak</span>
+        </div>
+        <h3>Doğrudan Git Modu</h3>
+        <p>Geliştirici toplulukları için filtreleme yapmadan commit başlıklarını ve referanslarını şeffaf bir zaman çizelgesiyle sunar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features Grid (Real Core Values) -->
+<section class="section section-alt" id="features">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">Ürününüzü Büyüten Çözümler</h2>
+      <p class="section-subtitle">Kullanıcı bağlılığını ve ürün şeffaflığını artırmak için tasarlanmış yetenekler.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <h3>Müşteri Diliyle Sürüm Notları</h3>
+        <p>Kod satırları yerine kullanıcının kazandığı değeri öne çıkaran samimi, akıcı ve anlaşılır duyurular üretir.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <h3>Sitenize Entegre Açılır Widget</h3>
+        <p>Web sitenizin köşesinde zarif bir bildirim butonu yer alır. Yeni bir güncelleme geldiğinde ziyaretçilerinizi anında haberdar eder.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </div>
+        <h3>Markanıza Özel Tasarım</h3>
+        <p>Kendi logonuzu ve kurumsal renklerinizi tanımlayın. Sürüm sayfanız ve widget'ınız tamamen ürününüzün bir parçası gibi görünsün.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <h3>Düzenli Ürün Zaman Tüneli</h3>
+        <p>Ürününüzün geçmişten bugüne katettiği mesafeyi şeffaf bir zaman tüneliyle sergileyin, müşterilerinizde kalıcı güven inşa edin.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 11a9 9 0 0 1 9 9"/>
+            <path d="M4 4a16 16 0 0 1 16 16"/>
+            <circle cx="5" cy="19" r="1"/>
+          </svg>
+        </div>
+        <h3>Çok Kanallı Paylaşım</h3>
+        <p>Sürüm duyurularınızı yalnızca web'de değil; RSS okuyucularında, e-posta bültenlerinizde veya Markdown dokümanlarında kolayca paylaşın.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <h3>Gizlilik ve E-posta Koruması</h3>
+        <p>Webhook verilerindeki yazar e-postaları kapıda ayıklanır; kamuya açık sayfalara veya arama motorlarına asla sızdırılmaz.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Widget Integration Showcase -->
+<section class="section" id="widget">
+  <div class="container">
+    <div class="widget-showcase-card">
+      <div class="widget-text-side">
+        <span class="sub-badge">Kolay Entegrasyon</span>
+        <h2>Web Sitenize Tek Satır Kodla Ekleyin</h2>
+        <p>
+          Ziyaretçileriniz sitenizden ayrılmadan yeni özellikleri keşfetsin. Sitenizin hızını ve tasarımını asla etkilemez.
+        </p>
+        <div class="code-copy-box">
+          <code>&lt;script src="{{ app_url }}/static/js/widget.js" data-key="PROJE_ANAHTARINIZ" async&gt;&lt;/script&gt;</code>
+        </div>
+        <div class="widget-cta-row">
+          <a href="/register" class="btn btn-primary">Hemen Başlayın</a>
+          <a href="/#how-it-works" class="btn btn-secondary">Kurulum Rehberi</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Projects Directory -->
+<section class="section section-alt" id="projects">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">Kayıtlı Sürüm Sayfaları</h2>
+      <p class="section-subtitle">Platform üzerinden yayınlanan güncel sürüm sayfalarına göz atın.</p>
     </div>
 
     {% if projects %}
     <div class="projects-grid">
       {% for p in projects %}
-      <div class="project-card" style="border-top: 3px solid {{ p.brand_color }}">
+      <div class="project-card">
         <div class="project-header">
-          <h4>{{ p.name }}</h4>
+          <div class="project-title-row">
+            <span class="project-dot" style="background-color: {{ p.brand_color }}"></span>
+            <h4>{{ p.name }}</h4>
+          </div>
           <span class="repo-tag">{{ p.github_repo_full_name }}</span>
         </div>
-        <div class="project-tags">
-          <span class="mode-badge">{{ p.parse_mode }}</span>
-          <span class="mode-badge">{{ p.audience }}</span>
-        </div>
         <div class="project-actions">
-          <a href="/c/{{ p.slug }}" class="btn-sm btn-outline">Changelog &rarr;</a>
+          <a href="/c/{{ p.slug }}" class="btn-sm btn-outline">Sürüm Sayfasını Aç</a>
           <a href="/c/{{ p.slug }}/export.md" class="btn-sm btn-ghost" download>Markdown</a>
-          <button class="btn-sm btn-ghost copy-btn" data-key="{{ p.widget_key }}">Widget</button>
+          <a href="/c/{{ p.slug }}/feed.xml" class="btn-sm btn-ghost" target="_blank">RSS</a>
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
     <div class="empty-state">
-      <p>Henüz kayıtlı proje bulunmuyor. İlk projenizi ekleyerek başlayabilirsiniz.</p>
+      <p>Henüz kayıtlı bir proje bulunmuyor. İlk projenizi ekleyerek sürüm notlarınızı yayınlayabilirsiniz.</p>
       <a href="/dashboard" class="btn btn-primary btn-sm">İlk Projeyi Ekle</a>
     </div>
     {% endif %}
   </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Interactive Live Showcase Switcher
+  const demoData = [
+    {
+      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"feat(search): add instant keyboard navigation with \'/\' shortcut"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      branch: 'main',
+      status: 'Yayına Hazır',
+      pillClass: 'category-pill pill-new',
+      pillText: 'Yeni Özellik',
+      title: 'Hızlı Klavye Gezintisi ve Arama',
+      body: 'Projeleriniz ve güncellemeleriniz arasında artık klavye kısayolları ile anında arama yapabilir, aradığınız sürüme sayfayı kaydırmadan kolayca ulaşabilirsiniz.'
+    },
+    {
+      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"fix(auth): prevent session timeout during active editor drafting"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      branch: 'main',
+      status: 'Yayına Hazır',
+      pillClass: 'category-pill pill-fix',
+      pillText: 'Düzeltme',
+      title: 'Kesintisiz Taslak Düzenleme',
+      body: 'İçerik veya duyuru hazırlarken belirli bir süre işlem yapılmadığında oturumun beklenmedik şekilde sonlanması sorunu giderildi; çalışmalarınız güvenle korunuyor.'
+    },
+    {
+      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"perf(feed): add memory caching for changelog rss and json feed"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      branch: 'main',
+      status: 'Yayına Hazır',
+      pillClass: 'category-pill pill-improvement',
+      pillText: 'İyileştirme',
+      title: 'Daha Hızlı Sayfa Yüklemesi',
+      body: 'Sürüm notları sayfası ve RSS besleme akışı optimize edildi; yüzlerce sürüm kaydı içeren geniş arşiv sayfaları artık bekleme olmaksızın anında açılıyor.'
+    }
+  ];
+
+  function switchPreviewExample(index) {
+    const item = demoData[index];
+    if (!item) return;
+
+    // Update active tab button
+    document.querySelectorAll('.preview-tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', i === index);
+    });
+
+    const terminalEl = document.getElementById('demo-terminal');
+    const branchEl = document.getElementById('demo-branch');
+    const statusEl = document.getElementById('demo-status');
+    const pillEl = document.getElementById('demo-pill');
+    const titleEl = document.getElementById('demo-title');
+    const bodyEl = document.getElementById('demo-body');
+
+    if (terminalEl) terminalEl.innerHTML = item.cmd;
+    if (branchEl) branchEl.textContent = item.branch;
+    if (statusEl) statusEl.textContent = item.status;
+    if (pillEl) {
+      pillEl.className = item.pillClass;
+      pillEl.textContent = item.pillText;
+    }
+    if (titleEl) titleEl.textContent = item.title;
+    if (bodyEl) bodyEl.textContent = item.body;
+  }
+</script>
 {% endblock %}

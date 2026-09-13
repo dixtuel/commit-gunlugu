@@ -7,11 +7,11 @@
   <div class="dashboard-header">
     <div>
       <h1 class="page-title">Sürüm Günlüğü Yönetimi</h1>
-      <p class="page-desc">Hoş geldiniz, <strong>{{ current_user.name or current_user.email }}</strong> &bull; Projelerinizi ve changelog taslaklarınızı yönetin.</p>
+      <p class="page-desc">Giriş yapıldı: <strong>{{ current_user.name or current_user.email }}</strong> &bull; Projelerinizi ve changelog taslaklarınızı buradan yönetin.</p>
     </div>
-    <div style="display: flex; gap: 10px;">
-      <button class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Hesap & KVKK Ayarları</button>
-      <button class="btn btn-primary" onclick="toggleModal('project-modal')">+ Yeni Proje Ekle</button>
+    <div class="header-action-group">
+      <button class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Hesap Ayarları</button>
+      <button class="btn btn-primary" onclick="toggleModal('project-modal')">Yeni Proje Ekle</button>
     </div>
   </div>
 
@@ -19,7 +19,7 @@
     <div class="main-column">
       <div class="card">
         <div class="card-header">
-          <h3>Gelen Taslaklar ve Günlükler</h3>
+          <h3>Gelen Taslaklar ve Yayınlar</h3>
           <span class="badge">{{ entries | length }} Kayıt</span>
         </div>
         <div class="card-body">
@@ -31,7 +31,7 @@
                 <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
                 <span class="status-pill status-{{ e.status | lower }}">{{ e.status }}</span>
                 {% if e.author_username %}
-                <span class="author-tag">{{ e.author_username }}</span>
+                <span class="author-tag">@{{ e.author_username }}</span>
                 {% endif %}
                 <span class="date-tag">{{ e.created_at[:10] }}</span>
               </div>
@@ -40,8 +40,8 @@
               
               <div class="entry-actions">
                 {% if e.status == "DRAFT" %}
-                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">✓ Yayınla</button>
-                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">✕ Yoksay</button>
+                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yayınla</button>
+                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Yoksay</button>
                 {% elif e.status == "PUBLISHED" %}
                 <span class="published-label">Yayında</span>
                 <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Kaldır</button>
@@ -55,7 +55,7 @@
           </div>
           {% else %}
           <div class="empty-state">
-            <p>Henüz işlenmiş bir commit veya PR bulunmuyor. GitHub Webhook ayarlandığında gelen olaylar otomatik taslağa dönüşecektir.</p>
+            <p>Henüz işlenmiş bir commit veya PR bulunmuyor. GitHub Webhook bağlandığında gelen olaylar otomatik taslağa dönüşecektir.</p>
           </div>
           {% endif %}
         </div>
@@ -65,7 +65,7 @@
     <div class="side-column">
       <div class="card">
         <div class="card-header">
-          <h3>Kayıtlı Projeleriniz</h3>
+          <h3>Kayıtlı Projeler</h3>
         </div>
         <div class="card-body">
           {% if projects %}
@@ -77,31 +77,31 @@
                 <strong>{{ p.name }}</strong>
               </div>
               <small class="text-muted">{{ p.github_repo_full_name }}</small>
-              <div style="margin: 4px 0;">
+              <div class="side-project-badges">
                 <span class="mode-badge" title="Çalışma Modu">{{ p.parse_mode }}</span>
                 <span class="mode-badge" title="Hedef Kitle">{{ p.audience }}</span>
               </div>
               <div class="side-project-actions">
                 <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Görüntüle</a>
-                <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown (.md)</a>
-                <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS Feed</a>
-                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget</button>
+                <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown</a>
+                <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS</a>
+                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
               </div>
             </li>
             {% endfor %}
           </ul>
           {% else %}
-          <p class="text-muted">Henüz kayıtlı bir projeniz yok. Sağ üstteki "+ Yeni Proje Ekle" butonunu kullanabilirsiniz.</p>
+          <p class="text-muted">Henüz kayıtlı bir projeniz yok. Üstteki "Yeni Proje Ekle" butonunu kullanabilirsiniz.</p>
           {% endif %}
         </div>
       </div>
 
       <div class="card webhook-helper-card">
         <div class="card-header">
-          <h3>GitHub Webhook Kurulumu</h3>
+          <h3>GitHub Webhook Bilgileri</h3>
         </div>
         <div class="card-body">
-          <p class="text-sm">GitHub reponuzun <strong>Settings &rarr; Webhooks</strong> sayfasına gidin:</p>
+          <p class="text-sm">GitHub reponuzun <strong>Settings &rarr; Webhooks</strong> sayfasına ekleyin:</p>
           <div class="code-box">
             <span class="code-label">Payload URL:</span>
             <code>{{ app_url }}/api/v1/webhook</code>
@@ -112,9 +112,9 @@
           </div>
           <div class="code-box">
             <span class="code-label">Secret:</span>
-            <code>.env'deki GITHUB_WEBHOOK_SECRET</code>
+            <code>.env içindeki GITHUB_WEBHOOK_SECRET</code>
           </div>
-          <p class="text-sm">Events: <strong>Pushes</strong> ve <strong>Pull requests</strong> seçeneğini işaretleyin.</p>
+          <p class="text-sm">Events: <strong>Pushes</strong> ve <strong>Pull requests</strong> seçeneklerini işaretleyin.</p>
         </div>
       </div>
     </div>
@@ -127,40 +127,40 @@
   <div class="modal-content">
     <div class="modal-header">
       <h3>Yeni Proje Ekle</h3>
-      <button class="close-btn" onclick="toggleModal('project-modal')">&times;</button>
+      <button class="close-btn" onclick="toggleModal('project-modal')" aria-label="Kapat">&times;</button>
     </div>
     <form id="create-project-form" onsubmit="submitNewProject(event)">
       <div class="form-group">
-        <label>GitHub Repo (Owner/Repo)</label>
+        <label for="repo_name">GitHub Repo (Owner/Repo)</label>
         <input type="text" id="repo_name" name="repo_name" placeholder="ör. dixtuel/commit-gunlugu" required class="input-text">
       </div>
       <div class="form-group">
-        <label>Görünen Proje Adı</label>
+        <label for="proj_name">Görünen Proje Adı</label>
         <input type="text" id="proj_name" name="proj_name" placeholder="ör. Commit Günlüğü" required class="input-text">
       </div>
       <div class="form-group">
-        <label>Çalışma Modu (Ayrıştırma & Çeviri)</label>
-        <select id="parse_mode" name="parse_mode" class="input-text" style="background: var(--input-bg, #0d1117); color: #fff; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; width: 100%;">
-          <option value="ai_editorial" selected>🧠 AI Editoryal (LLM + Fallback zinciri — Müşteri Odaklı)</option>
-          <option value="conventional">⚡ Conventional Commits (git-cliff / Angular katı regex)</option>
-          <option value="pr_centric">🏷️ PR-Centric (release-drafter etiketleri & PR başlıkları)</option>
-          <option value="raw_git">📜 Ham Git Log (auto-changelog tarzı direkt commit listesi)</option>
+        <label for="parse_mode">Çalışma Modu (Ayrıştırma Motoru)</label>
+        <select id="parse_mode" name="parse_mode" class="input-select">
+          <option value="ai_editorial" selected>AI Editoryal (LLM Destekli Müşteri Bülteni)</option>
+          <option value="conventional">Conventional Commits (git-cliff / Angular Regex)</option>
+          <option value="pr_centric">PR Odaklı (release-drafter Etiket &amp; Başlıkları)</option>
+          <option value="raw_git">Ham Git Log (auto-changelog Commit Listesi)</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Hedef Kitle (Görünüm Düzeyi)</label>
-        <select id="audience" name="audience" class="input-text" style="background: var(--input-bg, #0d1117); color: #fff; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; width: 100%;">
-          <option value="end_user" selected>👤 Son Kullanıcı (Sade, anlaşılır, hash'siz)</option>
-          <option value="developer">💻 Geliştirici (Commit SHA linkli, PR numaralı ve teknik)</option>
+        <label for="audience">Hedef Kitle Düzeyi</label>
+        <select id="audience" name="audience" class="input-select">
+          <option value="end_user" selected>Son Kullanıcı (Sade, hash'siz bülten)</option>
+          <option value="developer">Geliştirici (Commit SHA ve PR bağlantılı teknik döküm)</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Marka Rengi (Hex)</label>
-        <input type="color" id="brand_color" name="brand_color" value="#10b981" class="input-color">
+        <label for="brand_color">Marka Rengi</label>
+        <input type="color" id="brand_color" name="brand_color" value="#3b82f6" class="input-color">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('project-modal')">İptal</button>
-        <button type="submit" class="btn btn-primary">Kaydet</button>
+        <button type="submit" class="btn btn-primary">Projeyi Kaydet</button>
       </div>
     </form>
   </div>
@@ -171,29 +171,24 @@
   <div class="modal-backdrop" onclick="toggleModal('delete-account-modal')"></div>
   <div class="modal-content">
     <div class="modal-header">
-      <h3 style="color: var(--danger);">Hesabı ve Tüm Verileri Kalıcı Sil</h3>
-      <button class="close-btn" onclick="toggleModal('delete-account-modal')">&times;</button>
+      <h3 style="color: var(--danger);">Hesabı ve Verileri Kalıcı Olarak Sil</h3>
+      <button class="close-btn" onclick="toggleModal('delete-account-modal')" aria-label="Kapat">&times;</button>
     </div>
     <form method="POST" action="/api/user/delete-account">
       <p class="text-sm" style="margin-bottom: 14px;">
-        <strong>6698 sayılı KVKK Madde 11 uyarınca Unutulma Hakkı:</strong> Hesabınızı sildiğinizde size ait tüm projeler,
-        sürüm günlüğü kayıtları ve oturumlar geri döndürülemez şekilde yok edilir.
+        Hesabınızı sildiğinizde size ait tüm projeler, sürüm günlüğü kayıtları ve hesap bilgileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
       </p>
-      <div class="alert alert-danger" style="font-size: 0.82rem; margin-bottom: 14px;">
-        🛡️ <strong>İmha Ledger'ı Koruması:</strong> Silme işlemi bağımsız imha ledger'ına (erasure ledger) ve Cloudflare R2 nesne deposuna işlenir.
-        Sunucu felaket kurtarma senaryosunda eski bir snapshot yedeğinden geri yüklense dahi hesabınız diriltilmeden otomatik imha edilir.
+      <div class="form-group">
+        <label for="del_pwd">Mevcut Şifreniz</label>
+        <input type="password" id="del_pwd" name="password" required class="input-text" placeholder="••••••••">
       </div>
       <div class="form-group">
-        <label>Mevcut Şifreniz</label>
-        <input type="password" name="password" required class="input-text" placeholder="••••••••">
-      </div>
-      <div class="form-group">
-        <label>Onaylamak için <code>HESABIMI SİL</code> yazın:</label>
-        <input type="text" name="confirm_text" required class="input-text" placeholder="HESABIMI SİL">
+        <label for="del_confirm">Onaylamak için <code>HESABIMI SİL</code> yazın:</label>
+        <input type="text" id="del_confirm" name="confirm_text" required class="input-text" placeholder="HESABIMI SİL">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Vazgeç</button>
-        <button type="submit" class="btn btn-primary" style="background-color: var(--danger);">Kalıcı Olarak İmha Et</button>
+        <button type="submit" class="btn btn-primary btn-danger">Kalıcı Olarak İmha Et</button>
       </div>
     </form>
   </div>

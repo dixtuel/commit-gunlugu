@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ project.brand_name or project.name }} — Sürüm Notları</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='18' cy='18' r='3'/%3E%3Ccircle cx='6' cy='6' r='3'/%3E%3Cpath d='M18 15V9a6 6 0 0 0-6-6H6'/%3E%3C/svg%3E">
   <style>
     :root {
       --project-brand: {{ project.brand_color }};
@@ -20,20 +21,31 @@
 <body class="changelog-body">
   <header class="changelog-header">
     <div class="container">
-      <div class="changelog-brand-wrap" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
+      <div class="changelog-brand-wrap">
+        <div class="changelog-brand-left">
           {% if project.brand_logo_url %}
           <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
+          {% else %}
+          <div class="project-dot-lg" style="background-color: {{ project.brand_color }}"></div>
           {% endif %}
           <div>
             <h1 class="changelog-title">{{ project.brand_name or project.name }}</h1>
-            <p class="changelog-sub">En son güncellemeler, yeni özellikler ve hata düzeltmeleri</p>
+            <p class="changelog-sub">Sürüm güncellemeleri, iyileştirmeler ve hata düzeltmeleri</p>
           </div>
         </div>
-        <div class="changelog-export-actions" style="display: flex; gap: 0.5rem;">
-          <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="Markdown olarak indir">📄 Markdown (.md)</a>
-          <a href="/c/{{ project.slug }}/feed.xml" target="_blank" class="btn-sm btn-outline" title="RSS okuyucuya ekle">📡 RSS Feed</a>
-          <a href="/c/{{ project.slug }}/feed.json" target="_blank" class="btn-sm btn-outline" title="JSON Feed API">🔌 JSON Feed</a>
+        <div class="changelog-export-actions">
+          <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="Markdown olarak indir">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Markdown</span>
+          </a>
+          <a href="/c/{{ project.slug }}/feed.xml" target="_blank" class="btn-sm btn-outline" title="RSS okuyucu akışı">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+            <span>RSS 2.0</span>
+          </a>
+          <a href="/c/{{ project.slug }}/feed.json" target="_blank" class="btn-sm btn-outline" title="JSON Feed API">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>JSON Feed</span>
+          </a>
         </div>
       </div>
     </div>
@@ -52,10 +64,8 @@
             {% if e.author_username %}
             <span class="timeline-author">@{{ e.author_username }}</span>
             {% endif %}
-            {% if project.audience == "developer" %}
-              {% if e.source_pr_number %}
-              <span class="badge" style="background:#1f6feb; color:#fff; font-size:0.75rem;">PR #{{ e.source_pr_number }}</span>
-              {% endif %}
+            {% if project.audience == "developer" and e.source_pr_number %}
+            <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
             {% endif %}
           </div>
           <h2 class="timeline-heading">{{ e.title }}</h2>
@@ -68,14 +78,21 @@
     </div>
     {% else %}
     <div class="empty-state">
-      <p>Bu proje için henüz yayınlanmış bir sürüm notu bulunmuyor.</p>
+      <p>Bu proje için henüz yayınlanmış bir sürüm kaydı bulunmuyor.</p>
     </div>
     {% endif %}
   </main>
 
   <footer class="changelog-footer">
     <div class="container">
-      <p><a href="{{ app_url }}" target="_blank" rel="noopener">⚡ Commit Günlüğü ile güçlendirilmiştir</a></p>
+      <a href="{{ app_url }}" target="_blank" rel="noopener" class="changelog-powered">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="18" r="3"/>
+          <circle cx="6" cy="6" r="3"/>
+          <path d="M18 15V9a6 6 0 0 0-6-6H6"/>
+        </svg>
+        <span>Commit Günlüğü ile üretilmektedir</span>
+      </a>
     </div>
   </footer>
 </body>

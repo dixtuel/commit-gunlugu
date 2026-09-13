@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .expect("Geçersiz HOST veya PORT adresi");
 
-    tracing::info!("⚡ Commit Günlüğü başlatıldı: http://{}", addr);
+    tracing::info!("Commit Günlüğü başlatıldı: http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())

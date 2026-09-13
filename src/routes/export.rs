@@ -33,9 +33,9 @@ pub async fn export_markdown_handler(
             let short_date = if date.len() >= 10 { &date[..10] } else { date };
 
             let badge = match entry.category.as_str() {
-                "NEW" => "🚀 **[YENİ]**",
-                "FIX" => "🐛 **[DÜZELTME]**",
-                _ => "⚡ **[İYİLEŞTİRME]**",
+                "NEW" => "**[YENİ]**",
+                "FIX" => "**[DÜZELTME]**",
+                _ => "**[İYİLEŞTİRME]**",
             };
 
             md.push_str(&format!("### {} {}\n", badge, entry.title));
