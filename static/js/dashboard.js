@@ -437,7 +437,7 @@ async function submitManualEntry(e) {
 
 function copyWidgetSnippet(key) {
   const origin = window.location.origin;
-  const snippet = `<script src="${origin}/static/js/widget.js" data-key="${key}" async></script>`;
+  const snippet = `<script src="${origin}/widget.js" data-key="${key}" async></script>`;
   navigator.clipboard.writeText(snippet).then(() => {
     showToast("Widget entegrasyon kodu panoya kopyalandı!");
   }).catch(() => {

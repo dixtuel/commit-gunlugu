@@ -80,8 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Gömülebilir Widget rotaları
     let widget_routes = Router::new()
-        .route("/api/v1/widget/:widget_key", get(routes::api::get_widget_data))
-        .layer(api_limiter);
+        .route("/api/v1/widget/:widget_key", get(routes::api::get_widget_data).layer(api_limiter))
+        .route("/static/js/widget.js", get(routes::api::get_widget_js_handler))
+        .route("/widget.js", get(routes::api::get_widget_js_handler));
 
     // API rotaları
     let api_routes = Router::new()

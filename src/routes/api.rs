@@ -76,6 +76,29 @@ pub async fn get_widget_data(
     Ok((headers, Json(payload)))
 }
 
+/// Gömülebilir JavaScript betiğini doğrudan sıfır önbellek (no-cache) garantisiyle sunar.
+pub async fn get_widget_js_handler() -> impl IntoResponse {
+    let content = tokio::fs::read_to_string("static/js/widget.js")
+        .await
+        .unwrap_or_else(|_| "// widget.js yüklenemedi".to_string());
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/javascript; charset=utf-8"),
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, no-store, must-revalidate, max-age=0"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+
+    (headers, content)
+}
+
 pub async fn publish_entry_handler(
     State(state): State<AppState>,
     headers: HeaderMap,

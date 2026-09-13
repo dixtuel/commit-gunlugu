@@ -212,7 +212,7 @@
 
     function generateSnippet(layout, limit, width, theme, showDesc, showDate, showPill) {
       if (layout === 'badge') {
-        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script src="${APP_URL}/static/js/widget.js" data-key="${WIDGET_KEY}" async><\/script>`;
+        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script src="${APP_URL}/widget.js" data-key="${WIDGET_KEY}" async><\/script>`;
       }
 
       let attrs = [`class="commit-gunlugu-widget"`, `data-key="${WIDGET_KEY}"`, `data-layout="${layout}"`];
@@ -223,7 +223,7 @@
       if (!showDate) attrs.push(`data-show-date="false"`);
       if (!showPill) attrs.push(`data-show-pill="false"`);
 
-      return `<!-- Commit Günlüğü Gömülü Kutu -->\n<div ${attrs.join(' ')}></div>\n<script src="${APP_URL}/static/js/widget.js" async><\/script>`;
+      return `<!-- Commit Günlüğü Gömülü Kutu -->\n<div ${attrs.join(' ')}></div>\n<script src="${APP_URL}/widget.js" async><\/script>`;
     }
 
     function updateGenerator() {
@@ -258,9 +258,13 @@
 
         previewArea.appendChild(widgetEl);
 
-        // widget.js içerisindeki başlatıcıyı tetikle
-        if (window.dispatchEvent) {
-          window.dispatchEvent(new Event('DOMContentLoaded'));
+        // widget.js içerisindeki başlatıcıyı doğrudan tetikle
+        if (window.CommitGunlugu && window.CommitGunlugu.init) {
+          window.CommitGunlugu.init();
+        } else {
+          setTimeout(() => {
+            if (window.CommitGunlugu && window.CommitGunlugu.init) window.CommitGunlugu.init();
+          }, 150);
         }
       }
     }
@@ -288,7 +292,7 @@
     });
   </script>
 
-  <!-- Widget Çalıştırıcı Betik -->
-  <script src="/static/js/widget.js" data-key="{{ widget_key }}" data-mode="badge" async></script>
+  <!-- Widget Çalıştırıcı Betik (Doğrudan dinamik no-cache /widget.js rotası) -->
+  <script src="/widget.js" data-key="{{ widget_key }}" data-mode="badge"></script>
 </body>
 </html>

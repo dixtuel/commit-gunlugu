@@ -705,14 +705,12 @@
 
   // --- 3. BAŞLATICI / INITIALIZER ---
   async function initWidgets() {
-    if (isInitialized) return;
-    isInitialized = true;
-
     const scriptConfig = getScriptConfig();
     const inlineElements = Array.from(document.querySelectorAll('[data-cg-widget], [data-cg-key], .commit-gunlugu-widget, .commit-gunlugu-embed'));
 
     // 1) Sayfada AdSense tarzı yerleştirilmiş inline container'lar varsa doldur
     for (const el of inlineElements) {
+      if (el.shadowRoot) continue; // Zaten render edilmiş
       const key = el.getAttribute('data-key') || el.getAttribute('data-cg-key') || scriptConfig.key;
       if (!key) continue;
 
@@ -789,6 +787,12 @@
       }
     }
   }
+
+  // Global API erişimi
+  window.CommitGunlugu = {
+    init: initWidgets,
+    fetch: fetchWidgetData
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initWidgets);
