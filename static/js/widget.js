@@ -1,6 +1,21 @@
 /**
  * Commit Günlüğü — Gömülebilir Sürüm Günlüğü & Değişiklik Akışı Widget'ı
- * Bağımsız (Zero-dependency), AdBlocker dostu ve Shadow DOM korumalı.
+ * Bağımsız (Zero-dependency), AdBlocker dostu, tam özelleştirilebilir ve Shadow DOM korumalı.
+ *
+ * Parametreler (HTML data-* özellikleri):
+ * - data-key: Proje widget anahtarı (zorunlu)
+ * - data-layout: 'card' (varsayılan) | 'box' / 'square' | 'strip' / 'banner' | 'compact'
+ * - data-limit: Gösterilecek commit/sürüm sayısı (ör. 1, 2, 3, 5 - varsayılan: layout'a göre 1-3)
+ * - data-width: Özel genişlik (ör. '300px', '100%', '280px')
+ * - data-height: Özel yükseklik (ör. 'auto', '200px')
+ * - data-max-width: Maksimum genişlik (ör. '320px', 'none')
+ * - data-radius: Köşe yuvarlaklığı (ör. '8px', '16px', '0px')
+ * - data-theme: 'light' | 'dark' | 'auto' (varsayılan: 'auto')
+ * - data-brand-color: Özel vurgu rengi (ör. '#3b82f6')
+ * - data-show-desc: Açıklama metni görünsün mü? 'true' | 'false' (varsayılan: true)
+ * - data-show-date: Tarih görünsün mü? 'true' | 'false' (varsayılan: true)
+ * - data-show-pill: [YENİ]/[DÜZELTME] rozeti görünsün mü? 'true' | 'false' (varsayılan: true)
+ * - data-show-footer: Altbilgi çubuğu görünsün mü? 'true' | 'false' (varsayılan: true)
  */
 (function () {
   'use strict';
@@ -96,7 +111,7 @@
     }
   }
 
-  function getCommonStyles(brandColor, theme) {
+  function getCommonStyles(brandColor, theme, customWidth, customMaxWidth, customHeight, customRadius) {
     return `
       * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
       
@@ -110,7 +125,13 @@
         --cg-surface: #f8fafc;
         --cg-surface-hover: #f1f5f9;
         --cg-card-shadow: 0 4px 16px -2px rgba(0,0,0,0.06), 0 2px 6px -1px rgba(0,0,0,0.04);
+        --cg-w: ${customWidth || '100%'};
+        --cg-max-w: ${customMaxWidth || 'none'};
+        --cg-h: ${customHeight || 'auto'};
+        --cg-radius: ${customRadius || '14px'};
         display: block;
+        width: var(--cg-w);
+        max-width: var(--cg-max-w);
       }
 
       ${theme === 'dark' ? `
@@ -172,7 +193,7 @@
 
     const style = document.createElement('style');
     style.textContent = `
-      ${getCommonStyles(brandColor, 'auto')}
+      ${getCommonStyles(brandColor, 'auto', 'auto', 'none', 'auto', '12px')}
       .cg-badge-btn {
         position: fixed; right: 20px; bottom: 20px; z-index: 999999;
         background: var(--cg-brand); color: #ffffff; border: none; border-radius: 999px;
@@ -274,41 +295,61 @@
     shadow.appendChild(btn);
   }
 
-  // --- 2. GOOGLE ADSENSE BENZERİ SAYFA İÇİ GÖMÜLÜ WIDGET ---
+  // --- 2. SAYFA İÇİ GÖMÜLÜ WIDGET (AYARLANABİLİR BOYUT VE SAYI) ---
   function renderInlineWidget(container, data, origin, opts) {
-    if (container.shadowRoot) return; // Zaten render edildiyse çift çalıştırma
+    if (container.shadowRoot) return;
 
     const shadow = container.attachShadow({ mode: 'open' });
     const brandColor = opts.brandColor || data.brand?.color || '#5b8a7a';
     const rawLayout = (opts.layout || 'card').toLowerCase();
     
-    // Güvenli layout eşleştirmesi (AdBlock filtrelerinden kaçınan isimler)
+    // Layout seçimi
     let layout = 'card';
     if (rawLayout === 'square' || rawLayout === 'box') layout = 'box';
     else if (rawLayout === 'banner' || rawLayout === 'strip' || rawLayout === 'horizontal') layout = 'strip';
+    else if (rawLayout === 'compact' || rawLayout === 'mini' || rawLayout === 'minimal') layout = 'compact';
 
     const theme = opts.theme || 'auto';
-    const limit = opts.limit || (layout === 'box' ? 2 : layout === 'strip' ? 1 : 3);
+    
+    // Gösterilecek kayıt sayısı (Kullanıcının verdiği data-limit esastır!)
+    let defaultLimit = 3;
+    if (layout === 'box') defaultLimit = 2;
+    else if (layout === 'strip' || layout === 'compact') defaultLimit = 1;
+
+    const limit = opts.limit !== undefined && opts.limit > 0 ? opts.limit : defaultLimit;
+
+    // Görünüm anahtarları
+    const showDesc = opts.showDesc !== false;
+    const showDate = opts.showDate !== false;
+    const showPill = opts.showPill !== false;
+    const showFooter = opts.showFooter !== false;
+
+    // Boyutlar
+    const customWidth = opts.width || null;
+    const customMaxWidth = opts.maxWidth || (layout === 'box' ? '360px' : layout === 'compact' ? '300px' : layout === 'strip' ? '100%' : '440px');
+    const customHeight = opts.height || null;
+    const customRadius = opts.radius || (layout === 'strip' ? '12px' : layout === 'box' ? '16px' : '14px');
 
     const style = document.createElement('style');
     let layoutSpecificStyles = '';
 
     if (layout === 'box') {
-      // 1:1 Kare / Kutu
+      // 1:1 Kare / Kutu (Sidebar / Grid için)
+      const minH = limit === 1 ? 'auto' : '280px';
       layoutSpecificStyles = `
         .cg-wrap-box {
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
-          border-radius: 16px;
-          padding: 20px;
+          border-radius: var(--cg-radius);
+          padding: 18px;
           box-shadow: var(--cg-card-shadow);
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           width: 100%;
-          max-width: 360px;
-          min-height: 300px;
+          min-height: ${minH};
+          height: var(--cg-h);
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
         .cg-wrap-box:hover {
@@ -323,7 +364,7 @@
           border-bottom: 1px solid var(--cg-border);
         }
         .cg-box-title {
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 700;
           color: var(--cg-text);
           display: flex;
@@ -339,19 +380,11 @@
           display: flex;
           flex-direction: column;
           gap: 12px;
-          padding: 14px 0;
+          padding: 12px 0;
           overflow: hidden;
         }
-        .cg-entry-unit {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .cg-entry-meta {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
+        .cg-entry-unit { display: flex; flex-direction: column; gap: 4px; }
+        .cg-entry-meta { display: flex; align-items: center; gap: 6px; }
         .cg-entry-date { font-size: 11px; color: var(--cg-text-dim); }
         .cg-entry-title { font-size: 13px; font-weight: 600; color: var(--cg-text); line-height: 1.35; }
         .cg-entry-desc {
@@ -393,7 +426,7 @@
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
-          border-radius: 12px;
+          border-radius: var(--cg-radius);
           padding: 14px 20px;
           box-shadow: var(--cg-card-shadow);
           display: flex;
@@ -401,6 +434,7 @@
           justify-content: space-between;
           gap: 16px;
           width: 100%;
+          height: var(--cg-h);
           flex-wrap: wrap;
         }
         .cg-strip-left {
@@ -408,7 +442,7 @@
           align-items: center;
           gap: 12px;
           flex: 1;
-          min-width: 260px;
+          min-width: 240px;
         }
         .cg-strip-badge {
           background: var(--cg-surface);
@@ -439,7 +473,7 @@
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          max-width: 580px;
+          max-width: 560px;
         }
         .cg-strip-right {
           display: flex;
@@ -461,18 +495,69 @@
         }
         .cg-btn-strip:hover { opacity: 0.9; }
       `;
+    } else if (layout === 'compact') {
+      // Kompakt / Tek Commit Mini Kart
+      layoutSpecificStyles = `
+        .cg-wrap-compact {
+          background: var(--cg-bg);
+          color: var(--cg-text);
+          border: 1px solid var(--cg-border);
+          border-radius: var(--cg-radius);
+          padding: 14px 16px;
+          box-shadow: var(--cg-card-shadow);
+          width: 100%;
+          height: var(--cg-h);
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .cg-compact-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 11px;
+        }
+        .cg-compact-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--cg-text);
+          line-height: 1.4;
+        }
+        .cg-compact-desc {
+          font-size: 11px;
+          color: var(--cg-text-muted);
+          line-height: 1.4;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .cg-compact-foot {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-top: 6px;
+          border-top: 1px dashed var(--cg-border);
+          font-size: 11px;
+        }
+        .cg-compact-link {
+          color: var(--cg-brand);
+          text-decoration: none;
+          font-weight: 600;
+        }
+      `;
     } else {
-      // card / dikey liste
+      // Standart card / Dikey Liste Kartı
       layoutSpecificStyles = `
         .cg-wrap-card {
           background: var(--cg-bg);
           color: var(--cg-text);
           border: 1px solid var(--cg-border);
-          border-radius: 14px;
+          border-radius: var(--cg-radius);
           padding: 18px;
           box-shadow: var(--cg-card-shadow);
           width: 100%;
-          max-width: 440px;
+          height: var(--cg-h);
         }
         .cg-card-head {
           display: flex;
@@ -506,7 +591,7 @@
     }
 
     style.textContent = `
-      ${getCommonStyles(brandColor, theme)}
+      ${getCommonStyles(brandColor, theme, customWidth, customMaxWidth, customHeight, customRadius)}
       ${layoutSpecificStyles}
     `;
     shadow.appendChild(style);
@@ -518,11 +603,11 @@
       const itemsHtml = entries.map(e => `
         <div class="cg-entry-unit">
           <div class="cg-entry-meta">
-            <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
-            <span class="cg-entry-date">${(e.published_at || '').substring(0, 10)}</span>
+            ${showPill ? `<span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>` : ''}
+            ${showDate ? `<span class="cg-entry-date">${(e.published_at || '').substring(0, 10)}</span>` : ''}
           </div>
           <div class="cg-entry-title">${escapeHtml(e.title)}</div>
-          <div class="cg-entry-desc">${escapeHtml(e.body)}</div>
+          ${showDesc && e.body ? `<div class="cg-entry-desc">${escapeHtml(e.body)}</div>` : ''}
         </div>
       `).join('');
 
@@ -533,17 +618,18 @@
             <span class="cg-pulse-dot"></span>
             <span>${escapeHtml(data.brand?.name || 'Yenilikler')}</span>
           </div>
-          <span style="font-size: 11px; font-weight: 600; color: var(--cg-text-dim);">Sürüm Günlüğü</span>
+          <span style="font-size: 11px; font-weight: 600; color: var(--cg-text-dim);">${limit === 1 ? 'Son Güncelleme' : 'Sürüm Notları'}</span>
         </div>
         <div class="cg-box-entries">
           ${itemsHtml}
         </div>
+        ${showFooter ? `
         <div class="cg-box-foot">
           <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-link">
             Tümünü Gör &rarr;
           </a>
           <a href="${origin}" target="_blank" rel="noopener" class="cg-watermark">Commit Günlüğü</a>
-        </div>
+        </div>` : ''}
       `;
     } else if (layout === 'strip') {
       const topEntry = entries[0] || { title: 'Yeni Güncelleme', category: 'NEW', body: '', published_at: '' };
@@ -556,28 +642,44 @@
           </div>
           <div class="cg-strip-info">
             <div class="cg-strip-title">
-              <span class="pill ${categoryClass(topEntry.category)}">${categoryLabel(topEntry.category)}</span>
+              ${showPill ? `<span class="pill ${categoryClass(topEntry.category)}">${categoryLabel(topEntry.category)}</span>` : ''}
               <span>${escapeHtml(topEntry.title)}</span>
             </div>
-            ${topEntry.body ? `<div class="cg-strip-desc">${escapeHtml(topEntry.body)}</div>` : ''}
+            ${showDesc && topEntry.body ? `<div class="cg-strip-desc">${escapeHtml(topEntry.body)}</div>` : ''}
           </div>
         </div>
         <div class="cg-strip-right">
-          <span style="font-size: 11px; color: var(--cg-text-dim);">${(topEntry.published_at || '').substring(0, 10)}</span>
+          ${showDate ? `<span style="font-size: 11px; color: var(--cg-text-dim);">${(topEntry.published_at || '').substring(0, 10)}</span>` : ''}
           <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-strip">
             İncele &rarr;
           </a>
         </div>
       `;
+    } else if (layout === 'compact') {
+      const topEntry = entries[0] || { title: 'Yeni Güncelleme', category: 'NEW', body: '', published_at: '' };
+      wrapper.className = 'cg-wrap-compact';
+      wrapper.innerHTML = `
+        <div class="cg-compact-head">
+          ${showPill ? `<span class="pill ${categoryClass(topEntry.category)}">${categoryLabel(topEntry.category)}</span>` : ''}
+          ${showDate ? `<span style="color: var(--cg-text-dim);">${(topEntry.published_at || '').substring(0, 10)}</span>` : ''}
+        </div>
+        <div class="cg-compact-title">${escapeHtml(topEntry.title)}</div>
+        ${showDesc && topEntry.body ? `<div class="cg-compact-desc">${escapeHtml(topEntry.body)}</div>` : ''}
+        <div class="cg-compact-foot">
+          <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-compact-link">İncele &rarr;</a>
+          <span style="color: var(--cg-text-dim); font-size: 10px;">${escapeHtml(data.brand?.name || 'Commit Günlüğü')}</span>
+        </div>
+      `;
     } else {
+      // card
       const itemsHtml = entries.map(e => `
         <div class="cg-card-unit">
           <div class="cg-card-meta">
-            <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
-            <span class="cg-card-date">${(e.published_at || '').substring(0, 10)}</span>
+            ${showPill ? `<span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>` : ''}
+            ${showDate ? `<span class="cg-card-date">${(e.published_at || '').substring(0, 10)}</span>` : ''}
           </div>
           <div class="cg-card-title">${escapeHtml(e.title)}</div>
-          <div class="cg-card-desc">${escapeHtml(e.body)}</div>
+          ${showDesc && e.body ? `<div class="cg-card-desc">${escapeHtml(e.body)}</div>` : ''}
         </div>
       `).join('');
 
@@ -585,15 +687,16 @@
       wrapper.innerHTML = `
         <div class="cg-card-head">
           <h4 class="cg-card-heading">${escapeHtml(data.brand?.name || 'Yenilikler')}</h4>
-          <span style="font-size: 11px; color: var(--cg-brand); font-weight: 600;">Son Sürümler</span>
+          <span style="font-size: 11px; color: var(--cg-brand); font-weight: 600;">${limit === 1 ? 'Son Sürüm' : 'Son Sürümler'}</span>
         </div>
         <div class="cg-card-list">
           ${itemsHtml}
         </div>
+        ${showFooter ? `
         <div class="cg-card-foot">
           <a href="${data.changelog_url}" target="_blank" rel="noopener">Tüm Güncellemeler &rarr;</a>
           <a href="${origin}" target="_blank" rel="noopener" class="cg-card-watermark">Commit Günlüğü</a>
-        </div>
+        </div>` : ''}
       `;
     }
 
@@ -617,12 +720,37 @@
       const layout = el.getAttribute('data-layout') || scriptConfig.layout || 'card';
       const theme = el.getAttribute('data-theme') || scriptConfig.theme || 'auto';
       const brandColor = el.getAttribute('data-brand-color') || null;
-      const limit = parseInt(el.getAttribute('data-limit') || '0', 10) || undefined;
+      
+      const width = el.getAttribute('data-width') || null;
+      const height = el.getAttribute('data-height') || null;
+      const maxWidth = el.getAttribute('data-max-width') || null;
+      const radius = el.getAttribute('data-radius') || null;
+
+      const showDesc = el.getAttribute('data-show-desc') !== 'false';
+      const showDate = el.getAttribute('data-show-date') !== 'false';
+      const showPill = el.getAttribute('data-show-pill') !== 'false';
+      const showFooter = el.getAttribute('data-show-footer') !== 'false';
+
+      const limitAttr = el.getAttribute('data-limit');
+      const limit = limitAttr ? parseInt(limitAttr, 10) : undefined;
 
       try {
         const data = await fetchWidgetData(origin, key);
         if (data && data.entries) {
-          renderInlineWidget(el, data, origin, { layout, theme, brandColor, limit });
+          renderInlineWidget(el, data, origin, {
+            layout,
+            theme,
+            brandColor,
+            limit,
+            width,
+            height,
+            maxWidth,
+            radius,
+            showDesc,
+            showDate,
+            showPill,
+            showFooter
+          });
         }
       } catch (err) {
         console.error('[Commit Günlüğü] Inline widget yüklenemedi:', err);
