@@ -1,15 +1,56 @@
 /**
- * Commit Günlüğü — Gömülebilir Sürüm Günlüğü Widget'ı
- * Bağımsız (Zero-dependency) ve Shadow DOM ile stil çakışmasız.
- * Kullanım:
- * <script src="https://commit.dixtuel.tr/static/js/widget.js" data-key="w_xyz..." async></script>
+ * Commit Günlüğü — Gömülebilir Sürüm Günlüğü & Değişiklik Listesi Widget'ı
+ * Bağımsız (Zero-dependency) ve Shadow DOM ile tam stil izolasyonu.
+ *
+ * Kullanım Biçimleri:
+ * 1. Sabit Buton & Açılır Panel (Badge Popover):
+ *    <script src="https://commit.dixtuel.tr/static/js/widget.js" data-key="w_xyz..." async></script>
+ *
+ * 2. Google AdSense Benzeri Sayfa İçi Gömülü Kutu (Kare, Dikdörtgen, Banner):
+ *    <!-- Kare Kutu (Sidebar / Grid için) -->
+ *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="square"></div>
+ *
+ *    <!-- Yatay Banner (Header altı / Footer üstü için) -->
+ *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="banner"></div>
+ *
+ *    <!-- Dikey Kart Listesi (İçerik kenarı / Sidebar için) -->
+ *    <div class="commit-gunlugu-widget" data-key="w_xyz..." data-layout="card" data-limit="3"></div>
+ *
+ *    <script src="https://commit.dixtuel.tr/static/js/widget.js" async></script>
  */
 (function () {
   'use strict';
 
   const STORAGE_KEY = 'cg_widget_last_seen';
-
   const currentScriptTag = document.currentScript;
+  const dataCache = new Map();
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g, tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag));
+  }
+
+  function categoryLabel(cat) {
+    switch (cat) {
+      case 'NEW': return 'YENİ';
+      case 'FIX': return 'DÜZELTME';
+      default: return 'İYİLEŞTİRME';
+    }
+  }
+
+  function categoryClass(cat) {
+    switch (cat) {
+      case 'NEW': return 'pill-new';
+      case 'FIX': return 'pill-fix';
+      default: return 'pill-improvement';
+    }
+  }
 
   function getScriptConfig() {
     let current = currentScriptTag || document.currentScript;
@@ -31,46 +72,95 @@
       origin = window.location.origin;
     }
 
-    return key ? { key, origin } : null;
+    const mode = current.getAttribute('data-mode') || 'badge';
+    const layout = current.getAttribute('data-layout') || 'card';
+    const theme = current.getAttribute('data-theme') || 'auto';
+    const limit = parseInt(current.getAttribute('data-limit') || '5', 10);
+
+    return key ? { key, origin, mode, layout, theme, limit, scriptElement: current } : null;
   }
 
-  function categoryLabel(cat) {
-    switch (cat) {
-      case 'NEW': return 'YENİ';
-      case 'FIX': return 'DÜZELTME';
-      default: return 'İYİLEŞTİRME';
+  async function fetchWidgetData(origin, key) {
+    const cacheKey = `${origin}:${key}`;
+    if (dataCache.has(cacheKey)) {
+      return dataCache.get(cacheKey);
     }
+
+    const promise = (async () => {
+      const res = await fetch(`${origin}/api/v1/widget/${key}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    })();
+
+    dataCache.set(cacheKey, promise);
+    return promise;
   }
 
-  function categoryClass(cat) {
-    switch (cat) {
-      case 'NEW': return 'pill-new';
-      case 'FIX': return 'pill-fix';
-      default: return 'pill-improvement';
-    }
+  function getCommonStyles(brandColor, theme) {
+    return `
+      * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      
+      :host {
+        --cg-brand: ${brandColor};
+        --cg-bg: #ffffff;
+        --cg-text: #1e293b;
+        --cg-text-muted: #64748b;
+        --cg-text-dim: #94a3b8;
+        --cg-border: #e2e8f0;
+        --cg-surface: #f8fafc;
+        --cg-surface-hover: #f1f5f9;
+        --cg-card-shadow: 0 4px 16px -2px rgba(0,0,0,0.06), 0 2px 6px -1px rgba(0,0,0,0.04);
+        display: block;
+      }
+
+      ${theme === 'dark' ? `
+        :host {
+          --cg-bg: #0f172a;
+          --cg-text: #f8fafc;
+          --cg-text-muted: #94a3b8;
+          --cg-text-dim: #64748b;
+          --cg-border: #334155;
+          --cg-surface: #1e293b;
+          --cg-surface-hover: #293548;
+          --cg-card-shadow: 0 4px 20px -2px rgba(0,0,0,0.4);
+        }
+      ` : theme === 'auto' ? `
+        @media (prefers-color-scheme: dark) {
+          :host {
+            --cg-bg: #0f172a;
+            --cg-text: #f8fafc;
+            --cg-text-muted: #94a3b8;
+            --cg-text-dim: #64748b;
+            --cg-border: #334155;
+            --cg-surface: #1e293b;
+            --cg-surface-hover: #293548;
+            --cg-card-shadow: 0 4px 20px -2px rgba(0,0,0,0.4);
+          }
+        }
+      ` : ''}
+
+      .pill {
+        font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+        letter-spacing: 0.03em; text-transform: uppercase; display: inline-block;
+      }
+      .pill-new { background: rgba(16, 185, 129, 0.15); color: #059669; }
+      .pill-fix { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+      .pill-improvement { background: rgba(59, 130, 246, 0.15); color: #2563eb; }
+
+      @media (prefers-color-scheme: dark) {
+        ${theme !== 'light' ? `
+          .pill-new { background: rgba(16, 185, 129, 0.25); color: #34d399; }
+          .pill-fix { background: rgba(239, 68, 68, 0.25); color: #f87171; }
+          .pill-improvement { background: rgba(59, 130, 246, 0.25); color: #60a5fa; }
+        ` : ''}
+      }
+    `;
   }
 
-  async function initWidget() {
-    const config = getScriptConfig();
-    if (!config || !config.key) {
-      console.warn('[Commit Günlüğü] Widget anahtarı (data-key) bulunamadı.');
-      return;
-    }
+  // --- 1. POPUP / BADGE WIDGET (Sağ alttaki buton) ---
+  function renderBadgeWidget(data, origin) {
+    if (document.getElementById('commit-gunlugu-widget-root')) return;
 
-    try {
-      const res = await fetch(`${config.origin}/api/v1/widget/${config.key}`);
-      if (!res.ok) return;
-
-      const data = await res.json();
-      if (!data.entries || data.entries.length === 0) return;
-
-      createWidgetUI(data, config.origin);
-    } catch (e) {
-      console.error('[Commit Günlüğü] Widget yükleme hatası:', e);
-    }
-  }
-
-  function createWidgetUI(data, origin) {
     const host = document.createElement('div');
     host.id = 'commit-gunlugu-widget-root';
     document.body.appendChild(host);
@@ -78,15 +168,14 @@
     const shadow = host.attachShadow({ mode: 'open' });
     const lastSeen = Number(localStorage.getItem(STORAGE_KEY) || 0);
     const unreadCount = data.entries.filter(e => new Date(e.published_at).getTime() > lastSeen).length;
-
-    const brandColor = data.brand.color || '#10b981';
+    const brandColor = data.brand.color || '#5b8a7a';
 
     const style = document.createElement('style');
     style.textContent = `
-      * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      ${getCommonStyles(brandColor, 'auto')}
       .cg-badge-btn {
         position: fixed; right: 20px; bottom: 20px; z-index: 999999;
-        background: ${brandColor}; color: #ffffff; border: none; border-radius: 999px;
+        background: var(--cg-brand); color: #ffffff; border: none; border-radius: 999px;
         padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
         display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px -6px rgba(0,0,0,0.3);
         transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -98,39 +187,35 @@
       }
       .cg-panel {
         position: fixed; right: 20px; bottom: 74px; z-index: 999999; width: 360px; max-width: calc(100vw - 40px);
-        max-height: 480px; background: #ffffff; color: #1f2328; border-radius: 12px;
+        max-height: 480px; background: var(--cg-bg); color: var(--cg-text); border-radius: 12px;
         box-shadow: 0 16px 40px -10px rgba(0,0,0,0.25); display: none; flex-direction: column;
-        overflow: hidden; border: 1px solid #e1e4e8; animation: cgFadeIn 0.18s ease-out;
+        overflow: hidden; border: 1px solid var(--cg-border); animation: cgFadeIn 0.18s ease-out;
       }
       @keyframes cgFadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
       }
       .cg-header {
-        padding: 14px 16px; border-bottom: 1px solid #f0f2f5; display: flex;
-        justify-content: space-between; align-items: center; background: #fafbfc;
+        padding: 14px 16px; border-bottom: 1px solid var(--cg-border); display: flex;
+        justify-content: space-between; align-items: center; background: var(--cg-surface);
       }
-      .cg-header h4 { font-size: 14px; font-weight: 700; color: #24292f; }
-      .cg-close-btn { background: none; border: none; font-size: 18px; color: #6e7781; cursor: pointer; }
+      .cg-header h4 { font-size: 14px; font-weight: 700; color: var(--cg-text); }
+      .cg-close-btn { background: none; border: none; font-size: 18px; color: var(--cg-text-muted); cursor: pointer; }
       .cg-content { overflow-y: auto; flex: 1; padding: 12px 16px; }
-      .cg-item { padding: 12px 0; border-bottom: 1px solid #f0f2f5; }
+      .cg-item { padding: 12px 0; border-bottom: 1px solid var(--cg-border); }
       .cg-item:last-child { border-bottom: none; }
       .cg-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-      .cg-pill { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
-      .pill-new { background: #d1fae5; color: #065f46; }
-      .pill-fix { background: #fee2e2; color: #991b1b; }
-      .pill-improvement { background: #dbeafe; color: #1e40af; }
-      .cg-date { font-size: 11px; color: #8c959f; }
-      .cg-author { font-size: 11px; color: ${brandColor}; font-weight: 600; }
-      .cg-title { font-size: 13px; font-weight: 600; color: #24292f; margin-bottom: 4px; line-height: 1.4; }
-      .cg-body { font-size: 12px; color: #57606a; line-height: 1.5; }
+      .cg-date { font-size: 11px; color: var(--cg-text-dim); }
+      .cg-author { font-size: 11px; color: var(--cg-brand); font-weight: 600; }
+      .cg-title { font-size: 13px; font-weight: 600; color: var(--cg-text); margin-bottom: 4px; line-height: 1.4; }
+      .cg-body { font-size: 12px; color: var(--cg-text-muted); line-height: 1.5; }
       .cg-footer {
-        padding: 10px 16px; border-top: 1px solid #f0f2f5; background: #fafbfc;
+        padding: 10px 16px; border-top: 1px solid var(--cg-border); background: var(--cg-surface);
         display: flex; justify-content: space-between; align-items: center; font-size: 11px;
       }
-      .cg-footer a { color: ${brandColor}; text-decoration: none; font-weight: 600; }
+      .cg-footer a { color: var(--cg-brand); text-decoration: none; font-weight: 600; }
       .cg-footer a:hover { text-decoration: underline; }
-      .cg-brand { color: #8c959f; text-decoration: none; }
+      .cg-brand { color: var(--cg-text-dim); text-decoration: none; }
     `;
     shadow.appendChild(style);
 
@@ -148,7 +233,7 @@
     const entriesHtml = data.entries.slice(0, 5).map(e => `
       <div class="cg-item">
         <div class="cg-meta">
-          <span class="cg-pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
+          <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
           <span class="cg-date">${(e.published_at || '').substring(0, 10)}</span>
           ${e.author ? `<span class="cg-author">${e.author}</span>` : ''}
         </div>
@@ -189,20 +274,443 @@
     shadow.appendChild(btn);
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>'"]/g, tag => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      "'": '&#39;',
-      '"': '&quot;'
-    }[tag] || tag));
+  // --- 2. GOOGLE ADSENSE BENZERİ INLINE GÖMÜLÜ WIDGET ---
+  function renderInlineWidget(container, data, origin, opts) {
+    const shadow = container.attachShadow({ mode: 'open' });
+    const brandColor = opts.brandColor || data.brand.color || '#5b8a7a';
+    const layout = opts.layout || 'card'; // 'square' | 'banner' | 'card'
+    const theme = opts.theme || 'auto';
+    const limit = opts.limit || (layout === 'square' ? 2 : layout === 'banner' ? 1 : 3);
+
+    const style = document.createElement('style');
+
+    let layoutSpecificStyles = '';
+
+    if (layout === 'square') {
+      // 1:1 Kare / Box Layout (Sidebar / Grid için)
+      layoutSpecificStyles = `
+        .cg-inline-box {
+          background: var(--cg-bg);
+          color: var(--cg-text);
+          border: 1px solid var(--cg-border);
+          border-radius: 16px;
+          padding: 20px;
+          box-shadow: var(--cg-card-shadow);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          width: 100%;
+          max-width: 360px;
+          min-height: 320px;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .cg-inline-box:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px -4px rgba(0,0,0,0.08);
+        }
+        .cg-box-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 14px;
+          border-bottom: 1px solid var(--cg-border);
+        }
+        .cg-box-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--cg-text);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .cg-pulse-dot {
+          width: 8px; height: 8px; border-radius: 50%; background: var(--cg-brand);
+          display: inline-block; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+        .cg-box-body {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          padding: 16px 0;
+          overflow: hidden;
+        }
+        .cg-entry-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .cg-entry-meta {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cg-entry-date {
+          font-size: 11px;
+          color: var(--cg-text-dim);
+        }
+        .cg-entry-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--cg-text);
+          line-height: 1.35;
+        }
+        .cg-entry-desc {
+          font-size: 12px;
+          color: var(--cg-text-muted);
+          line-height: 1.45;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .cg-box-footer {
+          padding-top: 14px;
+          border-top: 1px solid var(--cg-border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .cg-btn-link {
+          background: var(--cg-brand);
+          color: #ffffff;
+          padding: 8px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.15s ease;
+        }
+        .cg-btn-link:hover { opacity: 0.9; }
+        .cg-watermark {
+          font-size: 11px;
+          color: var(--cg-text-dim);
+          text-decoration: none;
+        }
+      `;
+    } else if (layout === 'banner') {
+      // Yatay Dikdörtgen / Banner Layout (Header altı / İçerik araları için)
+      layoutSpecificStyles = `
+        .cg-inline-banner {
+          background: var(--cg-bg);
+          color: var(--cg-text);
+          border: 1px solid var(--cg-border);
+          border-radius: 12px;
+          padding: 14px 20px;
+          box-shadow: var(--cg-card-shadow);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          width: 100%;
+          flex-wrap: wrap;
+        }
+        .cg-banner-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+          min-width: 260px;
+        }
+        .cg-banner-badge {
+          background: var(--cg-surface);
+          border: 1px solid var(--cg-border);
+          padding: 6px 10px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--cg-brand);
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cg-banner-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .cg-banner-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--cg-text);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .cg-banner-desc {
+          font-size: 12px;
+          color: var(--cg-text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 600px;
+        }
+        .cg-banner-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          white-space: nowrap;
+        }
+        .cg-btn-banner {
+          background: var(--cg-brand);
+          color: #ffffff;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .cg-btn-banner:hover { opacity: 0.9; }
+      `;
+    } else {
+      // Standart 'card' / Dikey Liste Kartı (Blog kenarı, dokümantasyon, vb.)
+      layoutSpecificStyles = `
+        .cg-inline-card {
+          background: var(--cg-bg);
+          color: var(--cg-text);
+          border: 1px solid var(--cg-border);
+          border-radius: 14px;
+          padding: 18px;
+          box-shadow: var(--cg-card-shadow);
+          width: 100%;
+          max-width: 440px;
+        }
+        .cg-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--cg-border);
+          margin-bottom: 12px;
+        }
+        .cg-card-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--cg-text);
+        }
+        .cg-card-list {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .cg-card-item {
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--cg-border);
+        }
+        .cg-card-item:last-child {
+          padding-bottom: 0;
+          border-bottom: none;
+        }
+        .cg-card-meta {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+        .cg-card-date {
+          font-size: 11px;
+          color: var(--cg-text-dim);
+        }
+        .cg-card-entry-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--cg-text);
+          margin-bottom: 4px;
+          line-height: 1.4;
+        }
+        .cg-card-entry-desc {
+          font-size: 12px;
+          color: var(--cg-text-muted);
+          line-height: 1.45;
+        }
+        .cg-card-footer {
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--cg-border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 11px;
+        }
+        .cg-card-footer a {
+          color: var(--cg-brand);
+          text-decoration: none;
+          font-weight: 600;
+        }
+        .cg-card-footer a:hover { text-decoration: underline; }
+        .cg-card-brand {
+          color: var(--cg-text-dim);
+          text-decoration: none;
+        }
+      `;
+    }
+
+    style.textContent = `
+      ${getCommonStyles(brandColor, theme)}
+      ${layoutSpecificStyles}
+    `;
+    shadow.appendChild(style);
+
+    const entries = data.entries.slice(0, limit);
+    const wrapper = document.createElement('div');
+
+    if (layout === 'square') {
+      const itemsHtml = entries.map(e => `
+        <div class="cg-entry-item">
+          <div class="cg-entry-meta">
+            <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
+            <span class="cg-entry-date">${(e.published_at || '').substring(0, 10)}</span>
+          </div>
+          <div class="cg-entry-title">${escapeHtml(e.title)}</div>
+          <div class="cg-entry-desc">${escapeHtml(e.body)}</div>
+        </div>
+      `).join('');
+
+      wrapper.className = 'cg-inline-box';
+      wrapper.innerHTML = `
+        <div class="cg-box-header">
+          <div class="cg-box-title">
+            <span class="cg-pulse-dot"></span>
+            <span>${escapeHtml(data.brand.name || 'Yenilikler')}</span>
+          </div>
+          <span style="font-size: 11px; font-weight: 600; color: var(--cg-text-dim);">Sürüm Günlüğü</span>
+        </div>
+        <div class="cg-box-body">
+          ${itemsHtml}
+        </div>
+        <div class="cg-box-footer">
+          <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-link">
+            Tümünü Gör &rarr;
+          </a>
+          <a href="${origin}" target="_blank" rel="noopener" class="cg-watermark">Commit Günlüğü</a>
+        </div>
+      `;
+    } else if (layout === 'banner') {
+      const topEntry = entries[0] || { title: 'Yeni Güncelleme', category: 'NEW', body: '', published_at: '' };
+      wrapper.className = 'cg-inline-banner';
+      wrapper.innerHTML = `
+        <div class="cg-banner-left">
+          <div class="cg-banner-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span>YENİLİK</span>
+          </div>
+          <div class="cg-banner-info">
+            <div class="cg-banner-title">
+              <span class="pill ${categoryClass(topEntry.category)}">${categoryLabel(topEntry.category)}</span>
+              <span>${escapeHtml(topEntry.title)}</span>
+            </div>
+            ${topEntry.body ? `<div class="cg-banner-desc">${escapeHtml(topEntry.body)}</div>` : ''}
+          </div>
+        </div>
+        <div class="cg-banner-right">
+          <span style="font-size: 11px; color: var(--cg-text-dim);">${(topEntry.published_at || '').substring(0, 10)}</span>
+          <a href="${data.changelog_url}" target="_blank" rel="noopener" class="cg-btn-banner">
+            İncele &rarr;
+          </a>
+        </div>
+      `;
+    } else {
+      // card
+      const itemsHtml = entries.map(e => `
+        <div class="cg-card-item">
+          <div class="cg-card-meta">
+            <span class="pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
+            <span class="cg-card-date">${(e.published_at || '').substring(0, 10)}</span>
+          </div>
+          <div class="cg-card-entry-title">${escapeHtml(e.title)}</div>
+          <div class="cg-card-entry-desc">${escapeHtml(e.body)}</div>
+        </div>
+      `).join('');
+
+      wrapper.className = 'cg-inline-card';
+      wrapper.innerHTML = `
+        <div class="cg-card-header">
+          <h4 class="cg-card-title">${escapeHtml(data.brand.name || 'Yenilikler')}</h4>
+          <span style="font-size: 11px; color: var(--cg-brand); font-weight: 600;">Son Sürümler</span>
+        </div>
+        <div class="cg-card-list">
+          ${itemsHtml}
+        </div>
+        <div class="cg-card-footer">
+          <a href="${data.changelog_url}" target="_blank" rel="noopener">Tüm Güncellemeler &rarr;</a>
+          <a href="${origin}" target="_blank" rel="noopener" class="cg-card-brand">Commit Günlüğü</a>
+        </div>
+      `;
+    }
+
+    shadow.appendChild(wrapper);
+  }
+
+  // --- 3. BAŞLATICI / INITIALIZER ---
+  async function initWidgets() {
+    const scriptConfig = getScriptConfig();
+    const inlineElements = Array.from(document.querySelectorAll('[data-cg-widget], .commit-gunlugu-widget, .commit-gunlugu-embed'));
+
+    // 1) Sayfada AdSense tarzı yerleştirilmiş inline container'lar varsa onları doldur
+    for (const el of inlineElements) {
+      const key = el.getAttribute('data-key') || (scriptConfig ? scriptConfig.key : null);
+      if (!key) continue;
+
+      const origin = el.getAttribute('data-origin') || (scriptConfig ? scriptConfig.origin : window.location.origin);
+      const layout = el.getAttribute('data-layout') || (scriptConfig ? scriptConfig.layout : 'card');
+      const theme = el.getAttribute('data-theme') || (scriptConfig ? scriptConfig.theme : 'auto');
+      const brandColor = el.getAttribute('data-brand-color') || null;
+      const limit = parseInt(el.getAttribute('data-limit') || '0', 10) || undefined;
+
+      try {
+        const data = await fetchWidgetData(origin, key);
+        if (data && data.entries) {
+          renderInlineWidget(el, data, origin, { layout, theme, brandColor, limit });
+        }
+      } catch (err) {
+        console.error('[Commit Günlüğü] Inline widget yüklenemedi:', err);
+      }
+    }
+
+    // 2) Eğer script'in kendisi data-mode="inline" ise ve inline container yoksa script'in yerine göm
+    if (scriptConfig && scriptConfig.mode === 'inline' && inlineElements.length === 0 && scriptConfig.scriptElement) {
+      const host = document.createElement('div');
+      scriptConfig.scriptElement.parentNode.insertBefore(host, scriptConfig.scriptElement);
+
+      try {
+        const data = await fetchWidgetData(scriptConfig.origin, scriptConfig.key);
+        if (data && data.entries) {
+          renderInlineWidget(host, data, scriptConfig.origin, {
+            layout: scriptConfig.layout,
+            theme: scriptConfig.theme,
+            limit: scriptConfig.limit
+          });
+        }
+      } catch (err) {
+        console.error('[Commit Günlüğü] Script inline widget yüklenemedi:', err);
+      }
+      return;
+    }
+
+    // 3) Eğer script'te data-mode="badge" ise (veya varsayılan) ve data-key varsa sağ alttaki rozeti bas
+    if (scriptConfig && scriptConfig.key && scriptConfig.mode !== 'inline' && (!inlineElements.length || scriptConfig.mode === 'badge')) {
+      try {
+        const data = await fetchWidgetData(scriptConfig.origin, scriptConfig.key);
+        if (data && data.entries && data.entries.length > 0) {
+          renderBadgeWidget(data, scriptConfig.origin);
+        }
+      } catch (err) {
+        console.error('[Commit Günlüğü] Badge widget yüklenemedi:', err);
+      }
+    }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initWidget);
+    document.addEventListener('DOMContentLoaded', initWidgets);
   } else {
-    initWidget();
+    initWidgets();
   }
 })();

@@ -2,52 +2,119 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Commit Günlüğü Widget Önizleme</title>
+  <title>Commit Günlüğü — Gömülebilir Widget Formatları</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between p-8 font-sans">
-  <div class="max-w-4xl mx-auto w-full pt-12">
-    <header class="flex items-center justify-between pb-8 border-b border-slate-200">
+<body class="bg-slate-100 text-slate-800 min-h-screen p-4 md:p-10 font-sans">
+  <div class="max-w-5xl mx-auto space-y-10">
+
+    <!-- Üst Başlık & Menü -->
+    <header class="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-300">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-emerald-600/20">
           CG
         </div>
-        <span class="text-xl font-bold tracking-tight text-slate-900">Örnek Uygulama</span>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-slate-900">Commit Günlüğü Widget Vitrini</h1>
+          <p class="text-xs text-slate-500">Google AdSense Benzeri Ayarlanabilir Sayfa İçi Kutular & Sabit Rozet</p>
+        </div>
       </div>
-      <nav class="flex gap-6 text-sm font-medium text-slate-600">
-        <a href="#" class="hover:text-emerald-600">Özellikler</a>
-        <a href="#" class="hover:text-emerald-600">Entegrasyon</a>
-        <a href="#" class="hover:text-emerald-600">Dokümantasyon</a>
-      </nav>
+      <div class="flex gap-2 text-xs font-semibold">
+        <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full">Kare (Square)</span>
+        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">Yatay Banner</span>
+        <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full">Dikey Kart</span>
+      </div>
     </header>
 
-    <main class="mt-16 text-center space-y-6">
-      <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-        ✨ Canlı Widget Önizlemesi
-      </span>
-      <h1 class="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight">
-        Sitenizin köşesinde <span class="text-emerald-600">otomatik sürüm günlüğü</span>.
-      </h1>
-      <p class="text-lg text-slate-600 max-w-2xl mx-auto">
-        Kullanıcılarınız sitenizde gezinirken sağ alttaki bildirim rozetinden en güncel 5 yeniliği ve düzeltmeyi anında inceleyebilir.
-      </p>
-      <div class="pt-6 flex justify-center gap-4">
-        <button class="px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 transition">
-          Hemen Başlayın
-        </button>
-        <button class="px-6 py-3 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
-          Canlı Demo
-        </button>
+    <!-- 1. YATAY DİKDÖRTGEN / BANNER (Header altı veya içerik arası) -->
+    <section class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+          <span>1. Yatay Dikdörtgen (Banner)</span>
+          <span class="text-xs font-normal lowercase text-slate-400">data-layout="banner"</span>
+        </h2>
+        <span class="text-xs text-slate-400">Genişlik: %100 Esnek</span>
       </div>
-    </main>
+      <!-- Widget Mount Point -->
+      <div class="commit-gunlugu-widget" 
+           data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
+           data-layout="banner"
+           data-theme="light"></div>
+    </section>
+
+    <!-- İki Kolonlu Izgara (İçerik + Kenar Çubuğu) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+      <!-- Sol Taraf: Sayfa İçeriği & Dikey Kart -->
+      <div class="lg:col-span-7 space-y-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">Ürün Blogu / Makale</span>
+          <h3 class="text-2xl font-bold text-slate-900">
+            Kullanıcılarınıza sürüm yeniliklerini tam yerinde duyurun.
+          </h3>
+          <p class="text-sm text-slate-600 leading-relaxed">
+            Klasik popover butonlarının yanı sıra artık sayfa düzeninize göre kare, yatay banner veya dikey liste kartları yerleştirebilirsiniz. Tıpkı Google AdSense reklam kutuları gibi, sitenizin istediğiniz bölümüne tek satırlık bir <code class="bg-slate-100 px-1 py-0.5 rounded text-pink-600 font-mono text-xs">&lt;div&gt;</code> eklemeniz yeterlidir.
+          </p>
+        </div>
+
+        <!-- 2. DİKEY DİKDÖRTGEN / LİSTE KARTI -->
+        <section class="space-y-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <span>2. Dikey Dikdörtgen / Liste Kartı</span>
+            <span class="text-xs font-normal lowercase text-slate-400">data-layout="card" data-limit="3"</span>
+          </h2>
+          <!-- Widget Mount Point -->
+          <div class="commit-gunlugu-widget" 
+               data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
+               data-layout="card"
+               data-limit="3"
+               data-theme="light"></div>
+        </section>
+      </div>
+
+      <!-- Sağ Taraf: Kenar Çubuğu (Sidebar) & Kare Kutu -->
+      <div class="lg:col-span-5 space-y-6">
+        <!-- 3. KARE KUTU (Square Box) -->
+        <section class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <span>3. Kare Kutu (Square Box)</span>
+              <span class="text-xs font-normal lowercase text-slate-400">data-layout="square"</span>
+            </h2>
+            <span class="text-xs text-slate-400">Sidebar / 300-360px</span>
+          </div>
+          <!-- Widget Mount Point -->
+          <div class="commit-gunlugu-widget" 
+               data-key="w_feef676a5e9e49d1bc281c2712030ff7" 
+               data-layout="square"
+               data-limit="2"
+               data-theme="light"></div>
+        </section>
+
+        <div class="bg-slate-200/70 p-4 rounded-xl text-xs text-slate-600 space-y-2 border border-slate-300">
+          <p class="font-semibold text-slate-800">📌 Nasıl Kullanılır?</p>
+          <pre class="bg-slate-900 text-slate-100 p-2.5 rounded-lg overflow-x-auto text-[11px] font-mono leading-normal">&lt;!-- Kare / Kutu --&gt;
+&lt;div class="commit-gunlugu-widget" 
+     data-key="w_xyz..." 
+     data-layout="square"&gt;&lt;/div&gt;
+
+&lt;!-- Betiği Sayfaya Ekleyin --&gt;
+&lt;script src="https://commit.dixtuel.tr/static/js/widget.js" async&gt;&lt;/script&gt;</pre>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Alt Bilgi -->
+    <footer class="pt-8 border-t border-slate-300 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <span>Commit Günlüğü &copy; 2026 • Tüm Hakları Saklıdır</span>
+      <span class="font-medium text-slate-700">↘ Ekranın sağ altındaki sabit "Yenilikler" rozetine de tıklayabilirsiniz.</span>
+    </footer>
+
   </div>
 
-  <footer class="text-center text-xs text-slate-400 py-6">
-    Commit Günlüğü &copy; 2026 • Sağ alt köşedeki "Yenilikler" butonuna bakın ↘
-  </footer>
-
-  <!-- Canlı Widget Script -->
-  <script src="/static/js/widget.js" data-key="w_feef676a5e9e49d1bc281c2712030ff7"></script>
+  <!-- Tek Script ile Hem Sayfa İçi Kutuları Hem de Sağ Alttaki Rozeti Başlatır -->
+  <script src="/static/js/widget.js" data-key="w_feef676a5e9e49d1bc281c2712030ff7" data-mode="badge" async></script>
 </body>
 </html>
