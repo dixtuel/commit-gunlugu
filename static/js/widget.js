@@ -9,8 +9,13 @@
 
   const STORAGE_KEY = 'cg_widget_last_seen';
 
+  const currentScriptTag = document.currentScript;
+
   function getScriptConfig() {
-    const current = document.currentScript;
+    let current = currentScriptTag || document.currentScript;
+    if (!current) {
+      current = document.querySelector('script[data-key]') || document.querySelector('script[src*="widget.js"]');
+    }
     if (!current) return null;
 
     let key = current.getAttribute('data-key');
@@ -140,7 +145,7 @@
     const panel = document.createElement('div');
     panel.className = 'cg-panel';
 
-    const entriesHtml = data.entries.slice(0, 8).map(e => `
+    const entriesHtml = data.entries.slice(0, 5).map(e => `
       <div class="cg-item">
         <div class="cg-meta">
           <span class="cg-pill ${categoryClass(e.category)}">${categoryLabel(e.category)}</span>
