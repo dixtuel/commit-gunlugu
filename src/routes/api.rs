@@ -152,6 +152,8 @@ pub struct CreateProjectRequest {
     pub parse_mode: Option<String>,
     pub audience: Option<String>,
     pub template_style: Option<String>,
+    pub is_private: Option<bool>,
+    pub custom_github_token: Option<String>,
 }
 
 pub async fn create_project_handler(
@@ -164,6 +166,18 @@ pub async fn create_project_handler(
     let user = get_user_from_session(&state.db, &token)
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    let is_private = payload.is_private.unwrap_or(false);
+    let custom_token = payload
+        .custom_github_token
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+
+    if is_private && custom_token.is_none() {
+        return Err(AppError::BadRequest(
+            "Gizli (private) depolar için kişisel GitHub Access Token girilmesi zorunludur.".to_string(),
+        ));
+    }
 
     let slug = payload.slug.unwrap_or_else(|| {
         payload.github_repo_full_name.replace('/', "-").to_lowercase()
@@ -183,6 +197,8 @@ pub async fn create_project_handler(
         parse_mode: payload.parse_mode.unwrap_or_else(|| "ai_editorial".to_string()),
         audience: payload.audience.unwrap_or_else(|| "end_user".to_string()),
         template_style: payload.template_style.unwrap_or_else(|| "standard".to_string()),
+        is_private: if is_private { 1 } else { 0 },
+        custom_github_token: custom_token,
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
@@ -199,6 +215,8 @@ pub struct UpdateProjectSettingsRequest {
     pub parse_mode: String,
     pub audience: String,
     pub template_style: String,
+    pub is_private: Option<bool>,
+    pub custom_github_token: Option<String>,
 }
 
 pub async fn update_project_settings_handler(
@@ -224,6 +242,26 @@ pub async fn update_project_settings_handler(
     let name = payload.name.unwrap_or(existing.name);
     let brand_color = payload.brand_color.unwrap_or(existing.brand_color);
 
+    let is_private_val = payload
+        .is_private
+        .map(|b| if b { 1 } else { 0 })
+        .unwrap_or(existing.is_private);
+
+    let custom_token_owned = payload
+        .custom_github_token
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+
+    let effective_custom_token = custom_token_owned
+        .as_deref()
+        .or(existing.custom_github_token.as_deref());
+
+    if is_private_val == 1 && effective_custom_token.is_none() {
+        return Err(AppError::BadRequest(
+            "Gizli (private) depolar için kişisel GitHub Access Token tanımlı olmalıdır.".to_string(),
+        ));
+    }
+
     crate::db::update_project_full_settings(
         &state.db,
         &project_id,
@@ -233,6 +271,8 @@ pub async fn update_project_settings_handler(
         &payload.parse_mode,
         &payload.audience,
         &payload.template_style,
+        is_private_val,
+        effective_custom_token,
     )
     .await?;
 
@@ -350,7 +390,30 @@ pub async fn sync_github_commits_handler(
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
 
-    if let Some(ref gh_token) = state.config.github_token {
+    let effective_token = if let Some(ref t) = project.custom_github_token {
+        let trimmed = t.trim();
+        if !trimmed.is_empty() {
+            Some(trimmed.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let bearer_token = match effective_token {
+        Some(t) => Some(t),
+        None => {
+            if project.is_private == 1 {
+                return Err(AppError::BadRequest(
+                    "Bu repo gizli (private) olarak işaretlenmiş. GitHub API kısıtları nedeniyle özel deponuza erişebilmek için lütfen proje ayarlarından kendi GitHub Personal Access Token'ınızı (repo yetkili) tanımlayın.".to_string(),
+                ));
+            }
+            state.config.github_token.clone()
+        }
+    };
+
+    if let Some(ref gh_token) = bearer_token {
         req = req.bearer_auth(gh_token);
     }
 
@@ -362,6 +425,18 @@ pub async fn sync_github_commits_handler(
     if !res.status().is_success() {
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(AppError::BadRequest(format!(
+                "GitHub deposu bulunamadı (404). Repo adı '{}' hatalı olabilir ya da depo gizli (private) ise erişim izni olan bir GitHub Token tanımlanmamış olabilir.",
+                repo
+            )));
+        }
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            return Err(AppError::BadRequest(format!(
+                "GitHub API yetkilendirme hatası (HTTP {}). Tanımlanan token geçersiz, süresi dolmuş veya bu depoyu okuma yetkisine (repo scope) sahip değil.",
+                status
+            )));
+        }
         return Err(AppError::Internal(format!(
             "GitHub API hata döndürdü (HTTP {}): {}",
             status, body

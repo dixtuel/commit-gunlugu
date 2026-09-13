@@ -133,6 +133,36 @@ async function deleteEntry(entryId) {
   }
 }
 
+function togglePrivateTokenField(mode) {
+  if (mode === "create") {
+    const isPrivate = document.getElementById("is_private") ? document.getElementById("is_private").checked : false;
+    const label = document.getElementById("create_token_label");
+    const hint = document.getElementById("create_token_hint");
+    const input = document.getElementById("custom_github_token");
+    if (label) {
+      label.textContent = isPrivate ? "Kişisel GitHub Token (Zorunlu)" : "Kişisel GitHub Token (İsteğe Bağlı)";
+    }
+    if (hint) {
+      hint.innerHTML = isPrivate
+        ? "Gizli deponuza erişebilmek için <code>repo</code> iznine sahip PAT girilmesi zorunludur."
+        : "Açık (public) depolarda boş bırakırsanız sunucu kotası kullanılır. Kendi token'ınızı kullanmak isterseniz girebilirsiniz.";
+    }
+    if (input) input.required = isPrivate;
+  } else if (mode === "edit") {
+    const isPrivate = document.getElementById("edit_is_private") ? document.getElementById("edit_is_private").checked : false;
+    const label = document.getElementById("edit_token_label");
+    const hint = document.getElementById("edit_token_hint");
+    if (label) {
+      label.textContent = isPrivate ? "Kişisel GitHub Token (Private için Zorunlu)" : "Kişisel GitHub Token (İsteğe Bağlı)";
+    }
+    if (hint) {
+      hint.innerHTML = isPrivate
+        ? "Gizli depolar için kayıtlı geçerli bir token bulunmalıdır. Değiştirmek istemiyorsanız boş bırakın."
+        : "Açık depolarda isteğe bağlıdır; boş bırakırsanız platform kotası kullanılır.";
+    }
+  }
+}
+
 async function submitNewProject(e) {
   e.preventDefault();
   const repo = document.getElementById("repo_name").value.trim();
@@ -140,6 +170,14 @@ async function submitNewProject(e) {
   const color = document.getElementById("brand_color").value;
   const parseMode = document.getElementById("parse_mode") ? document.getElementById("parse_mode").value : "ai_editorial";
   const audience = document.getElementById("audience") ? document.getElementById("audience").value : "end_user";
+  const isPrivate = document.getElementById("is_private") ? document.getElementById("is_private").checked : false;
+  const customTokenInput = document.getElementById("custom_github_token");
+  const customToken = customTokenInput ? customTokenInput.value.trim() : "";
+
+  if (isPrivate && !customToken) {
+    showToast("Gizli (private) depolar için kişisel GitHub Token girmeniz zorunludur.", "error");
+    return;
+  }
 
   try {
     const res = await fetch("/api/v1/projects", {
@@ -150,7 +188,9 @@ async function submitNewProject(e) {
         name: name,
         brand_color: color,
         parse_mode: parseMode,
-        audience: audience
+        audience: audience,
+        is_private: isPrivate,
+        custom_github_token: customToken || null
       })
     });
 
@@ -165,18 +205,23 @@ async function submitNewProject(e) {
   }
 }
 
-function openEditProjectModal(id, name, color, mode, audience) {
+function openEditProjectModal(id, name, color, mode, audience, isPrivate) {
   currentEditingProjectId = id;
   const nameInput = document.getElementById("edit_proj_name");
   const colorInput = document.getElementById("edit_brand_color");
   const modeSelect = document.getElementById("edit_parse_mode");
   const audienceSelect = document.getElementById("edit_audience");
+  const isPrivateCheckbox = document.getElementById("edit_is_private");
+  const tokenInput = document.getElementById("edit_custom_github_token");
 
   if (nameInput) nameInput.value = name;
   if (colorInput) colorInput.value = color || "#2563eb";
   if (modeSelect) modeSelect.value = mode || "ai_editorial";
   if (audienceSelect) audienceSelect.value = audience || "end_user";
+  if (isPrivateCheckbox) isPrivateCheckbox.checked = (isPrivate === 1);
+  if (tokenInput) tokenInput.value = "";
 
+  togglePrivateTokenField("edit");
   toggleModal("edit-project-modal");
 }
 
@@ -188,18 +233,27 @@ async function submitEditProject(e) {
   const color = document.getElementById("edit_brand_color").value;
   const parseMode = document.getElementById("edit_parse_mode").value;
   const audience = document.getElementById("edit_audience").value;
+  const isPrivate = document.getElementById("edit_is_private") ? document.getElementById("edit_is_private").checked : false;
+  const tokenInput = document.getElementById("edit_custom_github_token");
+  const customToken = tokenInput ? tokenInput.value.trim() : "";
 
   try {
+    const payload = {
+      name: name,
+      brand_color: color,
+      parse_mode: parseMode,
+      audience: audience,
+      template_style: "standard",
+      is_private: isPrivate
+    };
+    if (customToken) {
+      payload.custom_github_token = customToken;
+    }
+
     const res = await fetch(`/api/v1/projects/${currentEditingProjectId}/settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name,
-        brand_color: color,
-        parse_mode: parseMode,
-        audience: audience,
-        template_style: "standard"
-      })
+      body: JSON.stringify(payload)
     });
 
     if (res.ok) {

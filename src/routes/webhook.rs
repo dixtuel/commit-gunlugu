@@ -110,6 +110,8 @@ pub async fn handle_github_webhook(
                 parse_mode: "ai_editorial".to_string(),
                 audience: "end_user".to_string(),
                 template_style: "standard".to_string(),
+                is_private: 0,
+                custom_github_token: None,
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
@@ -200,6 +202,8 @@ async fn process_event_background(
                     parse_mode: "ai_editorial".to_string(),
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
+                    is_private: 0,
+                    custom_github_token: None,
                     created_at: "".to_string(),
                     updated_at: "".to_string(),
                 }
@@ -284,6 +288,8 @@ async fn process_event_background(
                     parse_mode: "ai_editorial".to_string(),
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
+                    is_private: 0,
+                    custom_github_token: None,
                     created_at: "".to_string(),
                     updated_at: "".to_string(),
                 }

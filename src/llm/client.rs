@@ -122,7 +122,7 @@ impl LlmFallbackEngine {
             &clean_commits,
         );
 
-        // 1. Aşama: NVIDIA NIM
+        // 1. Aşama: NVIDIA NIM (DeepSeek V4, Nemotron 3.5, Gemma 4)
         if let Some(ref api_key) = self.config.nvidia_nim_api_key {
             for model in &self.config.nvidia_nim_models {
                 match self.call_nvidia_nim(api_key, model, &user_prompt).await {
@@ -137,24 +137,8 @@ impl LlmFallbackEngine {
             }
         }
 
-        // 2. Aşama: Mikoshi AI Gateway / LiteLLM
-        if let (Some(ref base_url), Some(ref api_key)) =
-            (&self.config.ai_api_base_url, &self.config.ai_api_key)
-        {
-            let model = self.config.ai_model.as_deref().unwrap_or("claude-sonnet-5");
-            match self.call_gateway(base_url, api_key, model, &user_prompt).await {
-                Ok(draft) => {
-                    tracing::info!("AI özeti başarıyla üretildi (AI Gateway: {})", model);
-                    return draft;
-                }
-                Err(e) => {
-                    tracing::warn!("AI Gateway ({}) başarısız: {}, deterministik motora geçiliyor", model, e);
-                }
-            }
-        }
-
-        // 3. Aşama: Deterministik Kural Motoru (Sıfır hata garantisi)
-        tracing::info!("AI servisleri devrede değil veya yanıt vermedi, deterministik motor çalıştırılıyor");
+        // 2. Aşama: Deterministik Kural Motoru (Zero-failure, çevrimdışı ve tam güvenli)
+        tracing::info!("AI devrede değil veya yanıt vermedi, deterministik kural motoru çalıştırılıyor");
         generate_deterministic_entry(
             clean_pr_title.as_deref(),
             clean_pr_body.as_deref(),
@@ -236,54 +220,6 @@ impl LlmFallbackEngine {
             .first()
             .and_then(|c| c.message.content.as_deref())
             .ok_or_else(|| "Boş model yanıtı".to_string())?;
-
-        parse_draft_json(raw_content)
-    }
-
-    async fn call_gateway(
-        &self,
-        base_url: &str,
-        api_key: &str,
-        model: &str,
-        user_prompt: &str,
-    ) -> Result<EntryDraft, String> {
-        let endpoint = format!("{}/chat/completions", base_url.trim_end_matches('/'));
-        let body = json!({
-            "model": model,
-            "messages": [
-                { "role": "system", "content": SYSTEM_PROMPT },
-                { "role": "user", "content": user_prompt }
-            ],
-            "temperature": 0.2,
-            "max_tokens": 1024,
-            "stream": false
-        });
-
-        let resp = self
-            .http
-            .post(&endpoint)
-            .bearer_auth(api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("Gateway istek hatası: {}", e))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(format!("Gateway HTTP {}: {}", status, text));
-        }
-
-        let parsed: ChatCompletionResponse = resp
-            .json()
-            .await
-            .map_err(|e| format!("Gateway JSON ayrıştırma: {}", e))?;
-
-        let raw_content = parsed
-            .choices
-            .first()
-            .and_then(|c| c.message.content.as_deref())
-            .ok_or_else(|| "Boş gateway yanıtı".to_string())?;
 
         parse_draft_json(raw_content)
     }

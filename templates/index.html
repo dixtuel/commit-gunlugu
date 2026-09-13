@@ -18,76 +18,76 @@
       <a href="#how-it-works" class="btn btn-secondary btn-lg">Nasıl Çalışır?</a>
     </div>
 
-    <!-- Live Preview Showcase (Interactive Before / After Transformation) -->
-    <div class="preview-showcase">
-      <div class="preview-tabs-nav" role="tablist" aria-label="Canlı Dönüşüm Örnekleri">
-        <button type="button" class="preview-tab-btn active" data-example="0" onclick="switchPreviewExample(0)">
-          <span>Arama Kısayolu</span>
-        </button>
-        <button type="button" class="preview-tab-btn" data-example="1" onclick="switchPreviewExample(1)">
-          <span>Oturum Düzeltmesi</span>
-        </button>
-        <button type="button" class="preview-tab-btn" data-example="2" onclick="switchPreviewExample(2)">
-          <span>Sayfa Hızı</span>
-        </button>
+    <!-- Live Transformation Showcase -->
+    <div class="transformation-showcase">
+      <div class="transformation-nav">
+        <span class="transformation-nav-label">Canlı Senaryolar:</span>
+        <div class="transformation-pill-group" role="tablist">
+          <button type="button" class="scenario-pill active" data-example="0" onclick="switchPreviewExample(0)">
+            <code>feat(search)</code>
+          </button>
+          <button type="button" class="scenario-pill" data-example="1" onclick="switchPreviewExample(1)">
+            <code>fix(auth)</code>
+          </button>
+          <button type="button" class="scenario-pill" data-example="2" onclick="switchPreviewExample(2)">
+            <code>perf(core)</code>
+          </button>
+        </div>
       </div>
 
-      <div class="preview-window">
-        <div class="window-header">
-          <div class="window-dots">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
+      <div class="transformation-grid">
+        <!-- Left: Developer Git Commit Input -->
+        <div class="transform-card source-card">
+          <div class="card-caption">
+            <div class="caption-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+              <span>Geliştirici Girdisi (Terminal &bull; Git Push)</span>
+            </div>
+            <span class="card-tag tag-raw">Ham Commit</span>
           </div>
-          <div class="window-title">Canlı Dönüşüm: Git Push &rarr; Sürüm Notu</div>
+          
+          <div class="terminal-body" id="demo-terminal">
+            <div class="term-line"><span class="t-prompt">$</span> git commit -m <span class="t-green">"feat(search): add instant keyboard navigation with '/' shortcut"</span></div>
+            <div class="term-line"><span class="t-prompt">$</span> git push origin main</div>
+            <div class="term-line t-status">&gt; GitHub Webhook iletildi (HMAC SHA-256 doğrulandı)</div>
+          </div>
+
+          <div class="card-footer-meta">
+            <span>Dal: <strong id="demo-branch">main</strong></span>
+            <span>Durum: <span class="status-ready" id="demo-status">İşlendi</span></span>
+          </div>
         </div>
 
-        <div class="window-body">
-          <div class="preview-split">
-            <!-- Left: What developer pushes -->
-            <div class="preview-col terminal-col">
-              <div class="col-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polyline points="4 17 10 11 4 5"/>
-                  <line x1="12" y1="19" x2="20" y2="19"/>
-                </svg>
-                <span>Deponuza Gönderilen Kod</span>
-              </div>
-              <div class="code-snippet" id="demo-terminal">
-                <span class="code-dim">$ git commit -m</span> <span class="code-green">"feat(search): add instant keyboard navigation with '/' shortcut"</span><br>
-                <span class="code-dim">$ git push origin main</span><br>
-                <span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>
-              </div>
-              <div class="commit-meta">
-                <span>Dal: <code id="demo-branch">main</code></span>
-                <span>Durum: <code id="demo-status">Yayına Hazır</code></span>
-              </div>
+        <!-- Right: User Changelog Output -->
+        <div class="transform-card result-card-wrap">
+          <div class="card-caption">
+            <div class="caption-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              <span>Kullanıcı Çıktısı (Sürüm Günlüğü &bull; Widget)</span>
             </div>
+            <span class="card-tag tag-editorial">Editoryal Bülten</span>
+          </div>
 
-            <!-- Right: What visitors read -->
-            <div class="preview-col changelog-col">
-              <div class="col-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                  <polyline points="10 9 9 9 8 9"/>
-                </svg>
-                <span>Kullanıcılarınızın Gördüğü Sürüm Notu</span>
-              </div>
-              <div class="result-card" id="demo-card">
-                <div class="result-header">
-                  <span class="category-pill pill-new" id="demo-pill">Yeni Özellik</span>
-                  <span class="result-date">Bugün</span>
-                </div>
-                <h4 id="demo-title">Hızlı Klavye Gezintisi ve Arama</h4>
-                <p id="demo-body">Projeleriniz ve güncellemeleriniz arasında artık klavye kısayolları ile anında arama yapabilir, aradığınız sürüme sayfayı kaydırmadan kolayca ulaşabilirsiniz.</p>
-                <div class="result-footer">
-                  <span class="badge-mode">Otomatik Yayında</span>
-                </div>
-              </div>
+          <div class="result-body-content" id="demo-card">
+            <div class="result-badge-row">
+              <span class="category-pill pill-new" id="demo-pill">Yeni Özellik</span>
+              <span class="result-date">Bugün</span>
             </div>
+            <h4 class="result-heading" id="demo-title">Hızlı Klavye Gezintisi ve Arama</h4>
+            <p class="result-paragraph" id="demo-body">Projeleriniz ve güncellemeleriniz arasında artık klavye kısayolları ile anında arama yapabilir, aradığınız sürüme sayfayı kaydırmadan kolayca ulaşabilirsiniz.</p>
+          </div>
+
+          <div class="card-footer-meta">
+            <span>Hedef: <strong>Son Kullanıcı</strong></span>
+            <span>Dağıtım: <strong class="text-emerald">Widget + Public URL + RSS</strong></span>
           </div>
         </div>
       </div>
@@ -346,27 +346,27 @@
   // Interactive Live Showcase Switcher
   const demoData = [
     {
-      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"feat(search): add instant keyboard navigation with \'/\' shortcut"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      cmd: '<div class="term-line"><span class="t-prompt">$</span> git commit -m <span class="t-green">"feat(search): add instant keyboard navigation with \'/\' shortcut"</span></div><div class="term-line"><span class="t-prompt">$</span> git push origin main</div><div class="term-line t-status">&gt; GitHub Webhook iletildi (HMAC SHA-256 doğrulandı)</div>',
       branch: 'main',
-      status: 'Yayına Hazır',
+      status: 'İşlendi',
       pillClass: 'category-pill pill-new',
       pillText: 'Yeni Özellik',
       title: 'Hızlı Klavye Gezintisi ve Arama',
       body: 'Projeleriniz ve güncellemeleriniz arasında artık klavye kısayolları ile anında arama yapabilir, aradığınız sürüme sayfayı kaydırmadan kolayca ulaşabilirsiniz.'
     },
     {
-      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"fix(auth): prevent session timeout during active editor drafting"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      cmd: '<div class="term-line"><span class="t-prompt">$</span> git commit -m <span class="t-green">"fix(auth): prevent session timeout during active editor drafting"</span></div><div class="term-line"><span class="t-prompt">$</span> git push origin main</div><div class="term-line t-status">&gt; GitHub Webhook iletildi (HMAC SHA-256 doğrulandı)</div>',
       branch: 'main',
-      status: 'Yayına Hazır',
+      status: 'İşlendi',
       pillClass: 'category-pill pill-fix',
       pillText: 'Düzeltme',
       title: 'Kesintisiz Taslak Düzenleme',
       body: 'İçerik veya duyuru hazırlarken belirli bir süre işlem yapılmadığında oturumun beklenmedik şekilde sonlanması sorunu giderildi; çalışmalarınız güvenle korunuyor.'
     },
     {
-      cmd: '<span class="code-dim">$ git commit -m</span> <span class="code-green">"perf(feed): add memory caching for changelog rss and json feed"</span><br><span class="code-dim">$ git push origin main</span><br><span class="code-blue">&gt; Webhook iletildi, sürüm notu hazırlandı.</span>',
+      cmd: '<div class="term-line"><span class="t-prompt">$</span> git commit -m <span class="t-green">"perf(feed): add memory caching for changelog rss and json feed"</span></div><div class="term-line"><span class="t-prompt">$</span> git push origin main</div><div class="term-line t-status">&gt; GitHub Webhook iletildi (HMAC SHA-256 doğrulandı)</div>',
       branch: 'main',
-      status: 'Yayına Hazır',
+      status: 'İşlendi',
       pillClass: 'category-pill pill-improvement',
       pillText: 'İyileştirme',
       title: 'Daha Hızlı Sayfa Yüklemesi',
@@ -378,8 +378,8 @@
     const item = demoData[index];
     if (!item) return;
 
-    // Update active tab button
-    document.querySelectorAll('.preview-tab-btn').forEach((btn, i) => {
+    // Update active scenario pill
+    document.querySelectorAll('.scenario-pill').forEach((btn, i) => {
       btn.classList.toggle('active', i === index);
     });
 

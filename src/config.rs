@@ -8,9 +8,6 @@ pub struct Config {
     pub default_webhook_secret: String,
     pub nvidia_nim_api_key: Option<String>,
     pub nvidia_nim_models: Vec<String>,
-    pub ai_api_base_url: Option<String>,
-    pub ai_api_key: Option<String>,
-    pub ai_model: Option<String>,
     pub app_url: String,
     pub github_token: Option<String>,
     pub webhook_rate_limit_per_minute: u64,
@@ -36,21 +33,11 @@ impl Config {
             .filter(|k| !k.trim().is_empty());
 
         let nvidia_nim_models = env::var("NVIDIA_NIM_MODELS")
-            .unwrap_or_else(|_| "deepseek-ai/deepseek-v4-flash-0731,nvidia/nemotron-3.5-lightning-30b-a3b".to_string())
+            .unwrap_or_else(|_| "deepseek-ai/deepseek-v4-flash-0731,nvidia/nemotron-3.5-lightning-30b-a3b,google/gemma-4-31b-it".to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
-
-        let ai_api_base_url = env::var("AI_API_BASE_URL")
-            .ok()
-            .filter(|u| !u.trim().is_empty());
-        let ai_api_key = env::var("AI_API_KEY")
-            .ok()
-            .filter(|k| !k.trim().is_empty());
-        let ai_model = env::var("AI_MODEL")
-            .ok()
-            .filter(|m| !m.trim().is_empty());
 
         let app_url = env::var("APP_BASE_URL")
             .unwrap_or_else(|_| "https://commit.dixtuel.tr".to_string());
@@ -76,9 +63,6 @@ impl Config {
             default_webhook_secret,
             nvidia_nim_api_key,
             nvidia_nim_models,
-            ai_api_base_url,
-            ai_api_key,
-            ai_model,
             app_url,
             github_token,
             webhook_rate_limit_per_minute,

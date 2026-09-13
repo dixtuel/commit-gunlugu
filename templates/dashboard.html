@@ -117,6 +117,11 @@
                 <span class="mode-badge" title="Hedef Kitle">
                   {% if p.audience == "developer" %}Geliştirici{% else %}Son Kullanıcı{% endif %}
                 </span>
+                {% if p.is_private == 1 %}
+                <span class="mode-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="Gizli Depo (Kişisel Token Gerekli)">🔒 Private</span>
+                {% else %}
+                <span class="mode-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399;" title="Herkese Açık Depo">🌐 Public</span>
+                {% endif %}
               </div>
 
               <div class="side-project-actions">
@@ -128,7 +133,7 @@
 
               <div class="side-project-controls">
                 <button class="btn-control-sync" onclick="syncProjectGithub('{{ p.id }}', this)">GitHub'dan Çek</button>
-                <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}')">Ayarlar</button>
+                <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}', {{ p.is_private }})">Ayarlar</button>
                 <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
               </div>
             </li>
@@ -216,6 +221,18 @@
         <label for="brand_color">Marka Vurgu Rengi</label>
         <input type="color" id="brand_color" name="brand_color" value="#2563eb" class="input-color">
       </div>
+      <div class="form-group">
+        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="checkbox" id="is_private" name="is_private" onchange="togglePrivateTokenField('create')">
+          <strong>Gizli Depo (Private Repository)</strong>
+        </label>
+        <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub'da gizli ise işaretleyin.</p>
+      </div>
+      <div class="form-group" id="private_token_group">
+        <label for="custom_github_token" id="create_token_label">Kişisel GitHub Token (İsteğe Bağlı)</label>
+        <input type="password" id="custom_github_token" name="custom_github_token" placeholder="ghp_... veya github_pat_..." class="input-text">
+        <p class="text-xs text-subtle" id="create_token_hint" style="margin-top: 0.25rem;">Açık (public) depolarda boş bırakırsanız sunucu kotası kullanılır. Gizli depolarda <code>repo</code> yetkili PAT zorunludur.</p>
+      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('project-modal')">İptal</button>
         <button type="submit" class="btn btn-primary">Projeyi Kaydet</button>
@@ -256,6 +273,18 @@
       <div class="form-group">
         <label for="edit_brand_color">Marka Vurgu Rengi</label>
         <input type="color" id="edit_brand_color" class="input-color">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="checkbox" id="edit_is_private" onchange="togglePrivateTokenField('edit')">
+          <strong>Gizli Depo (Private Repository)</strong>
+        </label>
+        <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub üzerinde private ise işaretleyin.</p>
+      </div>
+      <div class="form-group" id="edit_private_token_group">
+        <label for="edit_custom_github_token" id="edit_token_label">Kişisel GitHub Token</label>
+        <input type="password" id="edit_custom_github_token" placeholder="Değiştirmek istemiyorsanız boş bırakın" class="input-text">
+        <p class="text-xs text-subtle" id="edit_token_hint" style="margin-top: 0.25rem;">Açık depolarda isteğe bağlıdır; gizli depolarda geçerli bir token tanımlı olmalıdır.</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('edit-project-modal')">İptal</button>

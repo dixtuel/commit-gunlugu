@@ -243,8 +243,8 @@ pub async fn upsert_project(
 ) -> Result<(), AppError> {
     sqlx::query(
         r#"
-        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, is_private, custom_github_token, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(github_repo_full_name) DO UPDATE SET
             user_id = COALESCE(excluded.user_id, projects.user_id),
             name = excluded.name,
@@ -255,6 +255,8 @@ pub async fn upsert_project(
             parse_mode = excluded.parse_mode,
             audience = excluded.audience,
             template_style = excluded.template_style,
+            is_private = excluded.is_private,
+            custom_github_token = COALESCE(excluded.custom_github_token, projects.custom_github_token),
             updated_at = datetime('now')
         "#
     )
@@ -271,6 +273,8 @@ pub async fn upsert_project(
     .bind(&project.parse_mode)
     .bind(&project.audience)
     .bind(&project.template_style)
+    .bind(project.is_private)
+    .bind(&project.custom_github_token)
     .execute(pool)
     .await?;
 
@@ -299,23 +303,47 @@ pub async fn update_project_full_settings(
     parse_mode: &str,
     audience: &str,
     template_style: &str,
+    is_private: i64,
+    custom_github_token: Option<&str>,
 ) -> Result<bool, AppError> {
-    let res = sqlx::query(
-        r#"
-        UPDATE projects
-        SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, updated_at = datetime('now')
-        WHERE id = ? AND user_id = ?
-        "#
-    )
-    .bind(name)
-    .bind(brand_color)
-    .bind(parse_mode)
-    .bind(audience)
-    .bind(template_style)
-    .bind(project_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+    let res = if let Some(token) = custom_github_token {
+        sqlx::query(
+            r#"
+            UPDATE projects
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, is_private = ?, custom_github_token = ?, updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?
+            "#
+        )
+        .bind(name)
+        .bind(brand_color)
+        .bind(parse_mode)
+        .bind(audience)
+        .bind(template_style)
+        .bind(is_private)
+        .bind(token)
+        .bind(project_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE projects
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, is_private = ?, updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?
+            "#
+        )
+        .bind(name)
+        .bind(brand_color)
+        .bind(parse_mode)
+        .bind(audience)
+        .bind(template_style)
+        .bind(is_private)
+        .bind(project_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?
+    };
 
     Ok(res.rows_affected() > 0)
 }
