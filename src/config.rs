@@ -35,6 +35,8 @@ pub struct Config {
     /// Tanımlı değilse yalnızca GitHub Issues bağlantısı gösterilir, gerçek bir
     /// e-posta adresi public sayfalarda/arama motorlarında ifşa edilmez.
     pub privacy_contact_email: Option<String>,
+    /// Demo ve önizleme stüdyosunda gösterilecek varsayılan widget anahtarı.
+    pub demo_widget_key: Option<String>,
 }
 
 impl Config {
@@ -101,6 +103,10 @@ impl Config {
             .ok()
             .filter(|e| !e.trim().is_empty());
 
+        let demo_widget_key = env::var("DEMO_WIDGET_KEY")
+            .ok()
+            .filter(|k| !k.trim().is_empty());
+
         Self {
             host,
             port,
@@ -118,6 +124,7 @@ impl Config {
             smtp_from,
             legal_entity_name,
             privacy_contact_email,
+            demo_widget_key,
         }
     }
 

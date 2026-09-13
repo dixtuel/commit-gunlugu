@@ -138,6 +138,7 @@
             <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown</a>
             <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS</a>
             <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+            <a href="/widget-preview?key={{ p.widget_key }}" target="_blank" class="text-link" style="color: var(--primary); font-weight: 600;" title="Kare, Banner, Kart Stilleri ve Canlı Önizleme">Önizleme ↗</a>
             <button class="btn-copy-widget" style="opacity: 0.85;" onclick="copyText('{{ p.webhook_secret }}', '{{ p.name }} Webhook Secret')">Webhook Secret</button>
           </div>
 
@@ -247,10 +248,21 @@
           {% for p in projects %}
           <li class="widget-key-item">
             <span><span class="color-dot" style="background-color: {{ p.brand_color }}"></span> {{ p.name }}</span>
-            <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Rozet Kodu</button>
+              <a href="/widget-preview?key={{ p.widget_key }}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Önizle & Biçimlendir ↗</a>
+            </div>
           </li>
           {% endfor %}
         </ul>
+
+        <div style="margin-top: 1.25rem; padding: 0.85rem 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
+          <div>
+            <strong style="color: #166534; font-size: 0.85rem; display: block;">🎨 Widget Önizleme & Canlı Kod Stüdyosu</strong>
+            <p style="margin: 0.15rem 0 0; font-size: 0.75rem; color: #15803d;">Kare kutu, yatay banner, tek commit veya dikey kart formatlarını canlı görüp ölçüleri ayarlayarak HTML kodunu tek tıkla alabilirsiniz.</p>
+          </div>
+          <a href="/widget-preview" target="_blank" class="btn btn-primary btn-sm" style="white-space: nowrap;">Stüdyoyu Aç &rarr;</a>
+        </div>
       </div>
     </div>
     {% endif %}

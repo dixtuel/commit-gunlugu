@@ -122,7 +122,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/c/:slug", get(routes::public::public_changelog_page))
         .route("/c/:slug/export.md", get(routes::export::export_markdown_handler))
         .route("/c/:slug/feed.xml", get(routes::export::export_rss_handler))
-        .route("/c/:slug/feed.json", get(routes::export::export_json_handler));
+        .route("/c/:slug/feed.json", get(routes::export::export_json_handler))
+        .route("/widget-preview", get(routes::public::widget_preview_page))
+        .route("/demo", get(routes::public::widget_preview_page));
 
     let app = Router::new()
         .merge(public_routes)
