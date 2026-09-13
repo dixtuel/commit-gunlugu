@@ -185,8 +185,9 @@ pub async fn create_project_handler(
         payload.github_repo_full_name.replace('/', "-").to_lowercase()
     });
 
+    let raw_secret = format!("whsec_{}", Uuid::new_v4().simple());
     let encrypted_webhook_secret = encrypt_token_for_storage(
-        &state.config.default_webhook_secret,
+        &raw_secret,
         state.config.token_encryption_key.as_deref(),
     );
 
@@ -523,5 +524,43 @@ pub async fn sync_github_commits_handler(
         "success": true,
         "imported_count": imported,
         "message": format!("{} yeni commit içe aktarıldı ve taslak olarak eklendi.", imported)
+    })))
+}
+
+/// Projeye özel Webhook Secret'ı yeniden üretir ve AES-256-GCM ile veritabanına yazar.
+pub async fn regenerate_webhook_secret_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    let existing = crate::db::find_project_by_id(&state.db, &project_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Proje bulunamadı".to_string()))?;
+
+    if existing.user_id.as_deref() != Some(&user.id) {
+        return Err(AppError::Unauthorized("Bu projeyi düzenleme yetkiniz yok".to_string()));
+    }
+
+    let new_raw_secret = format!("whsec_{}", Uuid::new_v4().simple());
+    let encrypted = encrypt_token_for_storage(&new_raw_secret, state.config.token_encryption_key.as_deref());
+
+    sqlx::query("UPDATE projects SET webhook_secret = ?, updated_at = ? WHERE id = ?")
+        .bind(&encrypted)
+        .bind(chrono::Utc::now().to_rfc3339())
+        .bind(&project_id)
+        .execute(&state.db)
+        .await
+        .map_err(AppError::Database)?;
+
+    Ok(Json(json!({
+        "success": true,
+        "webhook_secret": new_raw_secret,
+        "message": "Webhook anahtarı başarıyla yenilendi."
     })))
 }

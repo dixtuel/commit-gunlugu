@@ -22,6 +22,7 @@ use crate::db::{
     mark_password_reset_used, update_user_password, update_user_profile,
 };
 use crate::error::AppError;
+use crate::sanitizer::mask_email;
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -61,10 +62,15 @@ pub async fn login_submit(
     let user_opt = find_user_by_email(&state.db, &email, state.config.token_encryption_key.as_deref()).await?;
 
     let valid = if let Some(ref u) = user_opt {
-        verify_password(&form.password, &u.password_hash)
+        let is_ok = verify_password(&form.password, &u.password_hash);
+        if !is_ok {
+            tracing::warn!("[AUTH] Başarısız giriş denemesi: '{}' için girilen şifre hatalı (user_id: {})", mask_email(&email), u.id);
+        }
+        is_ok
     } else {
         // Zamanlama saldırısını (timing attack) önlemek için dummy doğrulama
         let _ = verify_password("dummy", "$argon2id$v=19$m=19456,t=2,p=1$fake$fake");
+        tracing::warn!("[AUTH] Başarısız giriş denemesi: '{}' e-postasıyla kayıtlı hesap bulunamadı", mask_email(&email));
         false
     };
 
@@ -83,6 +89,7 @@ pub async fn login_submit(
     let user = user_opt.unwrap();
     let session_token = create_session(&state.db, &user.id).await?;
     let cookie = make_cookie_header(&session_token, &state.config.app_url);
+    tracing::info!("[AUTH] Başarılı oturum açma: '{}' (user_id: {})", mask_email(&user.email), user.id);
 
     let redirect_url = form.redirect.filter(|r| r.starts_with('/')).unwrap_or_else(|| "/dashboard".to_string());
 
@@ -181,7 +188,7 @@ pub async fn register_submit(
     };
 
     create_user(&state.db, &new_user, state.config.token_encryption_key.as_deref()).await?;
-    tracing::info!("Yeni kullanıcı kaydedildi: {}", email);
+    tracing::info!("[AUTH] Yeni kullanıcı başarıyla kaydedildi: '{}' (user_id: {})", mask_email(&email), new_user.id);
 
     // Otomatik oturum aç
     let session_token = create_session(&state.db, &new_user.id).await?;
@@ -206,6 +213,7 @@ pub async fn logout_handler(
 ) -> Result<Response, AppError> {
     if let Some(token) = extract_session_token(&headers) {
         let _ = destroy_session(&state.db, &token).await;
+        tracing::info!("[AUTH] Kullanıcı çıkış yaptı (oturum sonlandırıldı)");
     }
 
     let cookie = make_logout_cookie();
@@ -254,7 +262,7 @@ pub async fn forgot_password_submit(
     let user_opt = find_user_by_email(&state.db, &email, state.config.token_encryption_key.as_deref()).await.ok().flatten();
 
     if let Some(user) = user_opt {
-        tracing::info!("Şifre sıfırlama talebi alındı, kayıtlı hesap bulundu: [{}]", user.email);
+        tracing::info!("[AUTH] Şifre sıfırlama talebi alındı: '{}' (user_id: {})", mask_email(&user.email), user.id);
         let (raw_token, token_hash) = generate_reset_token();
         let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
         let reset_id = Uuid::new_v4().to_string();
@@ -265,13 +273,13 @@ pub async fn forgot_password_submit(
 
         let sent = crate::email::send_password_reset_email(&state.config, &user.email, &reset_link).await;
         if sent {
-            tracing::info!("Şifre sıfırlama e-postası başarıyla gönderildi: [{}]", user.email);
+            tracing::info!("[AUTH] Şifre sıfırlama e-postası başarıyla gönderildi: '{}'", mask_email(&user.email));
         } else {
-            tracing::warn!("SMTP üzerinden e-posta gönderilemedi. Yedek log kaydı [{}]: {}", user.email, reset_link);
+            tracing::warn!("[AUTH] SMTP e-posta gönderimi başarısız oldu (alıcı: {})", mask_email(&user.email));
         }
     } else {
         // Kullanıcı kuralı: O e-postayla sistemde kayıtlı hesap yoksa KESİNLİKLE mail gitmesin!
-        tracing::warn!("Şifre sıfırlama talebi reddedildi: [{}] adresiyle kayıtlı kullanıcı bulunamadı, mail GÖNDERİLMEYECEK.", email);
+        tracing::warn!("[AUTH] Şifre sıfırlama reddedildi: '{}' adresiyle kayıtlı kullanıcı bulunamadı (mail gönderilmedi)", mask_email(&email));
     }
 
     // Kullanıcı sayma (enumeration) saldırısını önlemek için her durumda aynı başarılı mesaj
@@ -396,7 +404,7 @@ pub async fn reset_password_submit(
     // Güvenlik: Eski tüm aktif oturumları kapat
     destroy_all_user_sessions(&state.db, &reset.user_id).await?;
 
-    tracing::info!("Kullanıcı şifresi başarıyla yenilendi (user_id: {})", reset.user_id);
+    tracing::info!("[AUTH] Kullanıcı şifresi başarıyla yenilendi (user_id: {})", reset.user_id);
 
     // Giriş sayfasına başarı mesajıyla yönlendir
     let tmpl = state.jinja.get_template("login.html")
@@ -519,6 +527,7 @@ pub async fn delete_account_handler(
     }
 
     if !verify_password(&form.password, &user.password_hash) {
+        tracing::warn!("[AUTH/KVKK] Hesap silme başarısız: şifre hatalı (user_id: {})", user.id);
         return Err(AppError::Unauthorized("Girdiğiniz şifre hatalı. Hesap silinemedi.".to_string()));
     }
 
@@ -529,6 +538,8 @@ pub async fn delete_account_handler(
         &user.email,
     )
     .await?;
+
+    tracing::info!("[AUTH/KVKK] Hesap ve ilişkili tüm veriler kalıcı olarak imha edildi (user_id: {})", user.id);
 
     let cookie = make_logout_cookie();
     let mut resp = Redirect::to("/login?deleted=true").into_response();

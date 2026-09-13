@@ -102,7 +102,7 @@ pub async fn send_password_reset_email(config: &Config, to_email: &str, reset_ur
         .to(match to_email.parse() {
             Ok(addr) => addr,
             Err(e) => {
-                tracing::error!("Geçersiz alıcı e-posta adresi ({}): {}", to_email, e);
+                tracing::error!("Geçersiz alıcı e-posta adresi ({}): {}", crate::sanitizer::mask_email(to_email), e);
                 return false;
             }
         })
@@ -133,13 +133,11 @@ pub async fn send_password_reset_email(config: &Config, to_email: &str, reset_ur
 
     match transport.send(email).await {
         Ok(_) => {
-            tracing::info!("Şifre sıfırlama e-postası gönderildi: {}", to_email);
+            tracing::info!("Şifre sıfırlama e-postası gönderildi: {}", crate::sanitizer::mask_email(to_email));
             true
         }
         Err(e) => {
-            // Yerel MTA yapılandırılmamışsa (ör. geliştirme ortamı) sessizce
-            // düşme yerine uyar; bağlantı linki zaten çağıran tarafta loglanır.
-            tracing::warn!("SMTP gönderimi başarısız ({}), reset linki loglanacak.", e);
+            tracing::warn!("SMTP gönderimi başarısız ({})", e);
             false
         }
     }

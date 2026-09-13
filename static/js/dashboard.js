@@ -477,3 +477,26 @@ async function syncProjectGithub(projectId, btn) {
     btn.textContent = originalText;
   }
 }
+
+async function regenerateProjectSecret(projectId, projectName) {
+  if (!confirm(`"${projectName}" projesinin Webhook Secret anahtarını yenilemek istediğinize emin misiniz? Eski anahtarı kullanan GitHub webhook'ları yeni anahtar girilene kadar çalışmayacaktır.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/projects/${projectId}/regenerate-secret`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await res.json();
+    if (res.ok && data.webhook_secret) {
+      const el = document.getElementById(`secret-val-${projectId}`);
+      if (el) el.innerText = data.webhook_secret;
+      showToast(`${projectName} için yeni Webhook Secret üretildi.`);
+    } else {
+      showToast(data.message || "Anahtar yenilenemedi.", "error");
+    }
+  } catch (err) {
+    showToast("Sunucuya ulaşılamadı.", "error");
+  }
+}

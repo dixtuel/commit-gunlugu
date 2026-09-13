@@ -56,8 +56,29 @@ pub async fn dashboard_page(
     };
 
     // 2. Tenant İzolasyonu: Yalnızca bu kullanıcıya ait projeler ve girişler
-    let user_projects = list_projects_for_user(&state.db, &user.id).await?;
+    let raw_projects = list_projects_for_user(&state.db, &user.id).await?;
     let user_entries = list_entries_for_user(&state.db, &user.id, 50).await?;
+
+    // Webhook Secret'ları dashboard'da kullanıcıya açık göstermek için çöz.
+    // Eğer proje eski default_webhook_secret kullanıyorsa projeye özel benzersiz whsec_ üretip DB'ye kaydet.
+    let mut user_projects = Vec::with_capacity(raw_projects.len());
+    for mut p in raw_projects {
+        let decrypted = crate::crypto::token::decrypt_token(&p.webhook_secret, state.config.token_encryption_key.as_deref());
+        if decrypted == state.config.default_webhook_secret || decrypted.trim().is_empty() {
+            let new_raw = format!("whsec_{}", uuid::Uuid::new_v4().simple());
+            let enc = crate::crypto::token::encrypt_token_for_storage(&new_raw, state.config.token_encryption_key.as_deref());
+            let _ = sqlx::query("UPDATE projects SET webhook_secret = ?, updated_at = ? WHERE id = ?")
+                .bind(&enc)
+                .bind(chrono::Utc::now().to_rfc3339())
+                .bind(&p.id)
+                .execute(&state.db)
+                .await;
+            p.webhook_secret = new_raw;
+        } else {
+            p.webhook_secret = decrypted;
+        }
+        user_projects.push(p);
+    }
 
     let tmpl = state
         .jinja

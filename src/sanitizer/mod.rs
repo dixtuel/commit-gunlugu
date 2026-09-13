@@ -45,6 +45,52 @@ pub fn sanitize_author(author: Option<&str>, username: Option<&str>) -> String {
     "Geliştirici".to_string()
 }
 
+/// KVKK ve GDPR uyumlu e-posta maskeleme.
+/// Kişisel tanımlayıcı bilgileri (PII) gizler, yalnızca doğrulama için ilk ve son karakteri bırakır.
+/// Örn: asrinklcc@sely.tr -> a***c@sely.tr
+pub fn mask_email(email: &str) -> String {
+    let trimmed = email.trim();
+    let parts: Vec<&str> = trimmed.split('@').collect();
+    if parts.len() != 2 {
+        return "***".to_string();
+    }
+    let local = parts[0];
+    let domain = parts[1];
+
+    let chars: Vec<char> = local.chars().collect();
+    let masked_local = match chars.len() {
+        0 => "***".to_string(),
+        1 => format!("{}***", chars[0]),
+        2 => format!("{}***{}", chars[0], chars[1]),
+        _ => format!("{}***{}", chars[0], chars[chars.len() - 1]),
+    };
+
+    format!("{}@{}", masked_local, domain)
+}
+
+/// KVKK ve GDPR uyumlu IP anonimleştirme.
+/// İstemcinin tekil cihaz olarak profillenmesini önlemek için:
+/// - IPv4 adreslerinin son oktetini sıfırlar (/24 subnet maskeleme, ör: 185.23.17.0/24)
+/// - IPv6 adreslerinin son 80 bitini sıfırlar (/48 subnet maskeleme, ör: 2001:db8:85a3::/48)
+pub fn anonymize_ip(ip_str: &str) -> String {
+    use std::net::IpAddr;
+    let trimmed = ip_str.trim();
+    if let Ok(ip) = trimmed.parse::<IpAddr>() {
+        match ip {
+            IpAddr::V4(v4) => {
+                let octets = v4.octets();
+                format!("{}.{}.{}.0/24", octets[0], octets[1], octets[2])
+            }
+            IpAddr::V6(v6) => {
+                let segments = v6.segments();
+                format!("{:x}:{:x}:{:x}::/48", segments[0], segments[1], segments[2])
+            }
+        }
+    } else {
+        "anon".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +116,22 @@ mod tests {
         assert_eq!(sanitize_author(None, Some("octocat")), "@octocat");
         assert_eq!(sanitize_author(Some("Jane Doe <jane@example.com>"), None), "Jane Doe");
         assert_eq!(sanitize_author(None, None), "Geliştirici");
+    }
+
+    #[test]
+    fn test_mask_email() {
+        assert_eq!(mask_email("asrinklcc@sely.tr"), "a***c@sely.tr");
+        assert_eq!(mask_email("user@example.com"), "u***r@example.com");
+        assert_eq!(mask_email("a@example.com"), "a***@example.com");
+        assert_eq!(mask_email("ab@example.com"), "a***b@example.com");
+        assert_eq!(mask_email("invalid-email"), "***");
+    }
+
+    #[test]
+    fn test_anonymize_ip() {
+        assert_eq!(anonymize_ip("185.23.17.42"), "185.23.17.0/24");
+        assert_eq!(anonymize_ip("127.0.0.1"), "127.0.0.0/24");
+        assert_eq!(anonymize_ip("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), "2001:db8:85a3::/48");
+        assert_eq!(anonymize_ip("invalid-ip"), "anon");
     }
 }

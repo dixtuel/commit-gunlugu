@@ -67,11 +67,18 @@ pub async fn handle_github_webhook(
         .as_ref()
         .map(|p| crate::crypto::token::decrypt_token(&p.webhook_secret, state.config.token_encryption_key.as_deref()));
 
-    let secret = decrypted_secret
-        .as_deref()
-        .unwrap_or(state.config.default_webhook_secret.as_str());
+    let verification_result = if let Some(ref proj_sec) = decrypted_secret {
+        if verify_github_signature(proj_sec, sig_header, &body).is_ok() {
+            Ok(())
+        } else {
+            // Fallback: Eski/default webhook secret ile dene (geriye dönük uyumluluk)
+            verify_github_signature(&state.config.default_webhook_secret, sig_header, &body)
+        }
+    } else {
+        verify_github_signature(&state.config.default_webhook_secret, sig_header, &body)
+    };
 
-    verify_github_signature(secret, sig_header, &body)?;
+    verification_result?;
 
     tracing::info!(
         "Geçerli GitHub Webhook alındı: event={}, delivery={}, repo={}",

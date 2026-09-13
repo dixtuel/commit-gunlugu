@@ -7,7 +7,6 @@ use minijinja::path_loader;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
@@ -34,9 +33,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "commit_gunlugu=debug,tower_http=info".into()),
+                .unwrap_or_else(|_| "commit_gunlugu=info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .compact(),
+        )
         .init();
 
     let config = Config::from_env();
@@ -88,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/entries/:id/delete", post(routes::api::delete_entry_handler))
         .route("/api/v1/projects", get(routes::api::list_projects_handler).post(routes::api::create_project_handler))
         .route("/api/v1/projects/:id/settings", post(routes::api::update_project_settings_handler))
+        .route("/api/v1/projects/:id/regenerate-secret", post(routes::api::regenerate_webhook_secret_handler))
         .route("/api/v1/projects/:id/delete", post(routes::api::delete_project_handler))
         .route("/api/v1/projects/:id/entries", post(routes::api::create_manual_entry_handler))
         .route("/api/v1/projects/:id/sync-github", post(routes::api::sync_github_commits_handler))
@@ -130,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest_service("/static", ServeDir::new("static"))
         .layer(cors)
         .layer(axum_mw::from_fn(middleware::security::security_headers))
-        .layer(TraceLayer::new_for_http())
+        .layer(axum_mw::from_fn(middleware::logger::http_logger))
         .with_state(app_state);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port)
