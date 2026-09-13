@@ -20,168 +20,260 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         <span>Yeni Repo Ekle</span>
       </button>
-      <button class="btn btn-outline btn-sm" onclick="toggleModal('delete-account-modal')">Hesap Ayarları</button>
     </div>
   </div>
 
-  <div class="dashboard-layout">
-    <!-- Main Column: Entries Stream -->
-    <div class="main-column">
-      <div class="card">
-        <div class="card-header">
-          <div class="header-filters">
-            <h3>Sürüm Notları Akışı</h3>
-            <div class="filter-tabs">
-              <button class="filter-btn active" data-filter="all" onclick="filterEntries('all')">Tümü ({{ entries | length }})</button>
-              <button class="filter-btn" data-filter="published" onclick="filterEntries('published')">Yayında</button>
-              <button class="filter-btn" data-filter="draft" onclick="filterEntries('draft')">Taslak</button>
-              <button class="filter-btn" data-filter="dismissed" onclick="filterEntries('dismissed')">Yoksayılan</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-body">
-          {% if entries %}
-          <div class="entries-list">
-            {% for e in entries %}
-            <div class="entry-item entry-status-{{ e.status | lower }}" id="entry-{{ e.id }}">
-              <div class="entry-meta">
-                <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
-                <span class="status-pill status-{{ e.status | lower }}">
-                  {% if e.status == "PUBLISHED" %}Yayında
-                  {% elif e.status == "DRAFT" %}Taslak
-                  {% else %}Yoksayıldı{% endif %}
-                </span>
-                {% if e.author_username %}
-                <span class="author-tag">@{{ e.author_username }}</span>
-                {% endif %}
-                <span class="date-tag">{{ (e.published_at or e.created_at)[:10] }}</span>
-                {% if e.source_pr_number %}
-                <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
-                {% endif %}
-              </div>
-              <h4 class="entry-title">{{ e.title }}</h4>
-              <p class="entry-body">{{ e.body }}</p>
-              
-              <div class="entry-actions">
-                {% if e.status == "DRAFT" %}
-                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yayınla</button>
-                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Yoksay</button>
-                {% elif e.status == "PUBLISHED" %}
-                <span class="published-label">Yayında</span>
-                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Kaldır</button>
-                {% else %}
-                <span class="dismissed-label">Yoksayıldı</span>
-                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yeniden Yayınla</button>
-                {% endif %}
-                <button class="btn-action btn-delete" onclick="deleteEntry('{{ e.id }}')">Sil</button>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="empty-state">
-            <p>Henüz işlenmiş bir commit veya PR bulunmuyor.</p>
-            <p class="text-sm text-muted">GitHub Webhook bağlandığında gelen hareketler otomatik algılanıp burada listelenecektir. İsterseniz "Yeni Sürüm Notu" butonuyla elle de kayıt ekleyebilirsiniz.</p>
-          </div>
-          {% endif %}
-        </div>
-      </div>
+  <!-- Sekme Gezinmesi: masaüstünde yatay şerit, dar ekranda dropdown'a düşer -->
+  <div class="dash-tabs-wrap">
+    <div class="dash-tabs" role="tablist" aria-label="Panel Bölümleri">
+      <button class="dash-tab active" data-tab="overview" role="tab" aria-selected="true">Genel Bakış</button>
+      <button class="dash-tab" data-tab="repos" role="tab" aria-selected="false">Depolar <span class="dash-tab-count">{{ projects | length }}</span></button>
+      <button class="dash-tab" data-tab="integrations" role="tab" aria-selected="false">Entegrasyonlar</button>
+      <button class="dash-tab" data-tab="account" role="tab" aria-selected="false">Hesap Ayarları</button>
     </div>
-
-    <!-- Side Column: Projects & Integrations -->
-    <div class="side-column">
-      <div class="card">
-        <div class="card-header">
-          <h3>Bağlı Repolar & Projeler</h3>
-          <span class="badge">{{ projects | length }}</span>
-        </div>
-        <div class="card-body">
-          {% if projects %}
-          <ul class="side-projects-list">
-            {% for p in projects %}
-            <li class="side-project-item" id="project-card-{{ p.id }}">
-              <div class="side-project-title">
-                <span class="color-dot" style="background-color: {{ p.brand_color }}"></span>
-                <strong>{{ p.name }}</strong>
-              </div>
-              <small class="repo-tag">{{ p.github_repo_full_name }}</small>
-              
-              <div class="side-project-badges">
-                <span class="mode-badge" title="Çalışma Modu">
-                  {% if p.parse_mode == "ai_editorial" %}AI Editoryal
-                  {% elif p.parse_mode == "conventional" %}Conventional
-                  {% elif p.parse_mode == "pr_centric" %}PR Odaklı
-                  {% else %}Ham Git{% endif %}
-                </span>
-                <span class="mode-badge" title="Hedef Kitle">
-                  {% if p.audience == "developer" %}Geliştirici{% else %}Son Kullanıcı{% endif %}
-                </span>
-                {% if p.is_private == 1 %}
-                <span class="mode-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="Gizli Depo (Kişisel Token Gerekli)">🔒 Private</span>
-                {% else %}
-                <span class="mode-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399;" title="Herkese Açık Depo">🌐 Public</span>
-                {% endif %}
-              </div>
-
-              <div class="side-project-actions">
-                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Sayfa</a>
-                <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown</a>
-                <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS</a>
-                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
-              </div>
-
-              <div class="side-project-controls">
-                <button class="btn-control-sync" onclick="syncProjectGithub('{{ p.id }}', this)">GitHub'dan Çek</button>
-                <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}', {{ p.is_private }})">Ayarlar</button>
-                <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
-              </div>
-            </li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          <div class="empty-state-side">
-            <p>Henüz kayıtlı bir projeniz yok.</p>
-            <button class="btn btn-primary btn-sm btn-block" onclick="toggleModal('project-modal')">İlk Repoyu Ekle</button>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- GitHub Webhook Info Card -->
-      <div class="card webhook-helper-card">
-        <div class="card-header">
-          <h3>GitHub Webhook Kurulumu</h3>
-        </div>
-        <div class="card-body">
-          <p class="text-sm">GitHub deponuzun <strong>Settings &rarr; Webhooks &rarr; Add webhook</strong> sayfasına girin:</p>
-          
-          <div class="code-box">
-            <div class="code-box-header">
-              <span class="code-label">Payload URL:</span>
-              <button class="copy-tiny-btn" onclick="copyText('{{ app_url }}/api/v1/webhook', 'Webhook URL')">Kopyala</button>
-            </div>
-            <code>{{ app_url }}/api/v1/webhook</code>
-          </div>
-
-          <div class="code-box">
-            <div class="code-box-header">
-              <span class="code-label">Content type:</span>
-              <button class="copy-tiny-btn" onclick="copyText('application/json', 'Content type')">Kopyala</button>
-            </div>
-            <code>application/json</code>
-          </div>
-
-          <div class="code-box">
-            <span class="code-label">Secret:</span>
-            <p class="text-xs text-subtle">Sunucu .env dosyanızdaki <code>GITHUB_WEBHOOK_SECRET</code> değeri.</p>
-          </div>
-
-          <p class="text-sm">Tetiklenecek Olaylar (Events): <strong>Pushes</strong> ve <strong>Pull requests</strong> kutucuklarını işaretleyin.</p>
-        </div>
-      </div>
-    </div>
+    <select class="dash-tabs-select" aria-label="Panel Bölümü Seç">
+      <option value="overview">Genel Bakış</option>
+      <option value="repos">Depolar ({{ projects | length }})</option>
+      <option value="integrations">Entegrasyonlar</option>
+      <option value="account">Hesap Ayarları</option>
+    </select>
   </div>
+
+  <!-- ============================== GENEL BAKIŞ ============================== -->
+  <section class="tab-panel active" data-panel="overview">
+    <div class="card">
+      <div class="card-header">
+        <div class="header-filters">
+          <h3>Sürüm Notları Akışı</h3>
+          <div class="filter-tabs">
+            <button class="filter-btn active" data-filter="all" onclick="filterEntries('all')">Tümü ({{ entries | length }})</button>
+            <button class="filter-btn" data-filter="published" onclick="filterEntries('published')">Yayında</button>
+            <button class="filter-btn" data-filter="draft" onclick="filterEntries('draft')">Taslak</button>
+            <button class="filter-btn" data-filter="dismissed" onclick="filterEntries('dismissed')">Yoksayılan</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body">
+        {% if entries %}
+        <div class="entries-list">
+          {% for e in entries %}
+          <div class="entry-item entry-status-{{ e.status | lower }}" id="entry-{{ e.id }}">
+            <div class="entry-meta">
+              <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
+              <span class="status-pill status-{{ e.status | lower }}">
+                {% if e.status == "PUBLISHED" %}Yayında
+                {% elif e.status == "DRAFT" %}Taslak
+                {% else %}Yoksayıldı{% endif %}
+              </span>
+              {% if e.author_username %}
+              <span class="author-tag">@{{ e.author_username }}</span>
+              {% endif %}
+              <span class="date-tag">{{ (e.published_at or e.created_at)[:10] }}</span>
+              {% if e.source_pr_number %}
+              <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
+              {% endif %}
+            </div>
+            <h4 class="entry-title">{{ e.title }}</h4>
+            <p class="entry-body">{{ e.body }}</p>
+
+            <div class="entry-actions">
+              {% if e.status == "DRAFT" %}
+              <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yayınla</button>
+              <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Yoksay</button>
+              {% elif e.status == "PUBLISHED" %}
+              <span class="published-label">Yayında</span>
+              <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Kaldır</button>
+              {% else %}
+              <span class="dismissed-label">Yoksayıldı</span>
+              <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yeniden Yayınla</button>
+              {% endif %}
+              <button class="btn-action btn-delete" onclick="deleteEntry('{{ e.id }}')">Sil</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>Henüz işlenmiş bir commit veya PR bulunmuyor.</p>
+          <p class="text-sm text-muted">GitHub Webhook bağlandığında gelen hareketler otomatik algılanıp burada listelenecektir. İsterseniz "Yeni Sürüm Notu" butonuyla elle de kayıt ekleyebilirsiniz.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== DEPOLAR ============================== -->
+  <section class="tab-panel" data-panel="repos" hidden>
+    {% if projects %}
+    <div class="repo-grid">
+      {% for p in projects %}
+      <div class="card repo-card" id="project-card-{{ p.id }}">
+        <div class="card-body">
+          <div class="side-project-title">
+            <span class="color-dot" style="background-color: {{ p.brand_color }}"></span>
+            <strong>{{ p.name }}</strong>
+          </div>
+          <small class="repo-tag">{{ p.github_repo_full_name }}</small>
+
+          <div class="side-project-badges">
+            <span class="mode-badge" title="Çalışma Modu">
+              {% if p.parse_mode == "ai_editorial" %}AI Editoryal
+              {% elif p.parse_mode == "conventional" %}Conventional
+              {% elif p.parse_mode == "pr_centric" %}PR Odaklı
+              {% else %}Ham Git{% endif %}
+            </span>
+            <span class="mode-badge" title="Hedef Kitle">
+              {% if p.audience == "developer" %}Geliştirici{% else %}Son Kullanıcı{% endif %}
+            </span>
+            {% if p.is_private == 1 %}
+            <span class="mode-badge visibility-badge visibility-private" title="Gizli Depo (Kişisel Token Gerekli)">[private]</span>
+            {% else %}
+            <span class="mode-badge visibility-badge visibility-public" title="Herkese Açık Depo">[public]</span>
+            {% endif %}
+          </div>
+
+          <div class="side-project-actions">
+            <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Sayfa</a>
+            <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown</a>
+            <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS</a>
+            <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+          </div>
+
+          <div class="side-project-controls">
+            <button class="btn-control-sync" onclick="syncProjectGithub('{{ p.id }}', this)">GitHub'dan Çek</button>
+            <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}', {{ p.is_private }})">Ayarlar</button>
+            <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-body">
+        <div class="empty-state-side">
+          <p>Henüz kayıtlı bir projeniz yok.</p>
+          <button class="btn btn-primary btn-sm btn-block" onclick="toggleModal('project-modal')">İlk Repoyu Ekle</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ============================== ENTEGRASYONLAR ============================== -->
+  <section class="tab-panel" data-panel="integrations" hidden>
+    <div class="card webhook-helper-card">
+      <div class="card-header">
+        <h3>GitHub Webhook Kurulumu</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm">GitHub deponuzun <strong>Settings &rarr; Webhooks &rarr; Add webhook</strong> sayfasına girin:</p>
+
+        <div class="code-box">
+          <div class="code-box-header">
+            <span class="code-label">Payload URL:</span>
+            <button class="copy-tiny-btn" onclick="copyText('{{ app_url }}/api/v1/webhook', 'Webhook URL')">Kopyala</button>
+          </div>
+          <code>{{ app_url }}/api/v1/webhook</code>
+        </div>
+
+        <div class="code-box">
+          <div class="code-box-header">
+            <span class="code-label">Content type:</span>
+            <button class="copy-tiny-btn" onclick="copyText('application/json', 'Content type')">Kopyala</button>
+          </div>
+          <code>application/json</code>
+        </div>
+
+        <div class="code-box">
+          <span class="code-label">Secret:</span>
+          <p class="text-xs text-subtle">Sunucu .env dosyanızdaki <code>GITHUB_WEBHOOK_SECRET</code> değeri.</p>
+        </div>
+
+        <p class="text-sm">Tetiklenecek Olaylar (Events): <strong>Pushes</strong> ve <strong>Pull requests</strong> kutucuklarını işaretleyin.</p>
+      </div>
+    </div>
+
+    {% if projects %}
+    <div class="card">
+      <div class="card-header">
+        <h3>Gömülebilir Widget Kodları</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted">Her proje için ayrı bir widget anahtarı üretilir. Kopyaladığınız kodu sitenize tek satırla ekleyin.</p>
+        <ul class="widget-key-list">
+          {% for p in projects %}
+          <li class="widget-key-item">
+            <span><span class="color-dot" style="background-color: {{ p.brand_color }}"></span> {{ p.name }}</span>
+            <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ============================== HESAP AYARLARI ============================== -->
+  <section class="tab-panel" data-panel="account" hidden>
+    <div class="card">
+      <div class="card-header">
+        <h3>Profil Bilgileri</h3>
+      </div>
+      <div class="card-body">
+        <form id="profile-form" onsubmit="submitProfileForm(event)">
+          <div class="form-group">
+            <label for="profile_email">E-posta</label>
+            <input type="email" id="profile_email" class="input-text" value="{{ current_user.email }}" disabled>
+            <p class="text-xs text-subtle" style="margin-top: 0.25rem;">E-posta adresi şu an değiştirilemiyor.</p>
+          </div>
+          <div class="form-group">
+            <label for="profile_name">Görünen Ad</label>
+            <input type="text" id="profile_name" class="input-text" value="{{ current_user.name or '' }}" placeholder="Adınız" required maxlength="80">
+          </div>
+          <div class="modal-footer" style="padding: 0; border: none;">
+            <button type="submit" class="btn btn-primary">Profili Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Şifre Değiştir</h3>
+      </div>
+      <div class="card-body">
+        <form id="change-password-form" onsubmit="submitChangePasswordForm(event)">
+          <div class="form-group">
+            <label for="current_password">Mevcut Şifre</label>
+            <input type="password" id="current_password" class="input-text" required autocomplete="current-password">
+          </div>
+          <div class="form-group">
+            <label for="new_password">Yeni Şifre</label>
+            <input type="password" id="new_password" class="input-text" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="new_password_confirm">Yeni Şifre (Tekrar)</label>
+            <input type="password" id="new_password_confirm" class="input-text" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="modal-footer" style="padding: 0; border: none;">
+            <button type="submit" class="btn btn-primary">Şifreyi Güncelle</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card danger-zone-card">
+      <div class="card-header">
+        <h3 style="color: var(--danger);">Tehlikeli Alan</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm">Hesabınızı sildiğinizde tüm projeleriniz, sürüm notlarınız ve üyelik verileriniz kalıcı olarak imha edilir. Bu işlem geri alınamaz.</p>
+        <button class="btn btn-danger btn-sm" onclick="toggleModal('delete-account-modal')">Hesabı Kalıcı Olarak Sil</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- Modal 1: Yeni Proje Ekle -->
@@ -219,20 +311,23 @@
       </div>
       <div class="form-group">
         <label for="brand_color">Marka Vurgu Rengi</label>
-        <input type="color" id="brand_color" name="brand_color" value="#2563eb" class="input-color">
+        <input type="color" id="brand_color" name="brand_color" value="#5b8a7a" class="input-color">
       </div>
-      <div class="form-group">
-        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-          <input type="checkbox" id="is_private" name="is_private" onchange="togglePrivateTokenField('create')">
-          <strong>Gizli Depo (Private Repository)</strong>
-        </label>
-        <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub'da gizli ise işaretleyin.</p>
-      </div>
-      <div class="form-group" id="private_token_group">
-        <label for="custom_github_token" id="create_token_label">Kişisel GitHub Token (İsteğe Bağlı)</label>
-        <input type="password" id="custom_github_token" name="custom_github_token" placeholder="ghp_... veya github_pat_..." class="input-text">
-        <p class="text-xs text-subtle" id="create_token_hint" style="margin-top: 0.25rem;">Açık (public) depolarda boş bırakırsanız sunucu kotası kullanılır. Gizli depolarda <code>repo</code> yetkili PAT zorunludur.</p>
-      </div>
+      <fieldset class="visibility-fieldset">
+        <legend>Depo Görünürlüğü</legend>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="is_private" name="is_private" onchange="togglePrivateTokenField('create')">
+            <strong>Gizli Depo (Private Repository)</strong>
+          </label>
+          <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub'da gizli ise işaretleyin.</p>
+        </div>
+        <div class="form-group" id="private_token_group">
+          <label for="custom_github_token" id="create_token_label">Kişisel GitHub Token (İsteğe Bağlı)</label>
+          <input type="password" id="custom_github_token" name="custom_github_token" placeholder="ghp_... veya github_pat_..." class="input-text">
+          <p class="text-xs text-subtle" id="create_token_hint" style="margin-top: 0.25rem;">Açık (public) depolarda boş bırakırsanız sunucu kotası kullanılır. Gizli depolarda <code>repo</code> yetkili PAT zorunludur.</p>
+        </div>
+      </fieldset>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('project-modal')">İptal</button>
         <button type="submit" class="btn btn-primary">Projeyi Kaydet</button>
@@ -274,18 +369,21 @@
         <label for="edit_brand_color">Marka Vurgu Rengi</label>
         <input type="color" id="edit_brand_color" class="input-color">
       </div>
-      <div class="form-group">
-        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-          <input type="checkbox" id="edit_is_private" onchange="togglePrivateTokenField('edit')">
-          <strong>Gizli Depo (Private Repository)</strong>
-        </label>
-        <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub üzerinde private ise işaretleyin.</p>
-      </div>
-      <div class="form-group" id="edit_private_token_group">
-        <label for="edit_custom_github_token" id="edit_token_label">Kişisel GitHub Token</label>
-        <input type="password" id="edit_custom_github_token" placeholder="Değiştirmek istemiyorsanız boş bırakın" class="input-text">
-        <p class="text-xs text-subtle" id="edit_token_hint" style="margin-top: 0.25rem;">Açık depolarda isteğe bağlıdır; gizli depolarda geçerli bir token tanımlı olmalıdır.</p>
-      </div>
+      <fieldset class="visibility-fieldset">
+        <legend>Depo Görünürlüğü</legend>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit_is_private" onchange="togglePrivateTokenField('edit')">
+            <strong>Gizli Depo (Private Repository)</strong>
+          </label>
+          <p class="text-xs text-subtle" style="margin-top: 0.25rem;">Deponuz GitHub üzerinde private ise işaretleyin.</p>
+        </div>
+        <div class="form-group" id="edit_private_token_group">
+          <label for="edit_custom_github_token" id="edit_token_label">Kişisel GitHub Token</label>
+          <input type="password" id="edit_custom_github_token" placeholder="Değiştirmek istemiyorsanız boş bırakın" class="input-text">
+          <p class="text-xs text-subtle" id="edit_token_hint" style="margin-top: 0.25rem;">Açık depolarda isteğe bağlıdır; gizli depolarda geçerli bir token tanımlı olmalıdır.</p>
+        </div>
+      </fieldset>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="toggleModal('edit-project-modal')">İptal</button>
         <button type="submit" class="btn btn-primary">Değişiklikleri Kaydet</button>

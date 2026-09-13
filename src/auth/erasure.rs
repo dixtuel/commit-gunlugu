@@ -8,7 +8,6 @@ use uuid::Uuid;
 use crate::error::AppError;
 
 const LOCAL_LEDGER_PATH: &str = "data/erasure-ledger.jsonl";
-const R2_REMOTE_DEST: &str = "r2-mikoshi-crypt:latest/commit-gunlugu-erasure-ledger.jsonl";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ErasureRecord {
@@ -31,6 +30,7 @@ pub async fn purge_user(
     pool: &SqlitePool,
     user_id: &str,
     email: &str,
+    r2_remote: Option<String>,
 ) -> Result<(), AppError> {
     let email_hash = hash_email(email);
     let now = chrono::Utc::now().to_rfc3339();
@@ -78,34 +78,39 @@ pub async fn purge_user(
         }
     }
 
-    // 4. Asenkron olarak R2'ye kopyala (Arka plan task'ı, kullanıcıyı bekletmez)
-    tokio::spawn(async move {
-        sync_ledger_to_r2().await;
-    });
+    // 4. Yapılandırılmışsa asenkron olarak kendi R2 remote'unuza kopyala
+    // (Arka plan task'ı, kullanıcıyı bekletmez). R2_ERASURE_REMOTE tanımlı
+    // değilse ledger yalnızca yerel SQLite + jsonl dosyasında kalır.
+    if let Some(remote) = r2_remote {
+        tokio::spawn(async move {
+            sync_ledger_to_r2(&remote).await;
+        });
+    }
 
     tracing::info!("KVKK Hesap İmhası tamamlandı: user_id={}, email_hash={}", user_id, email_hash);
     Ok(())
 }
 
-/// R2 nesne deposuna imha ledger'ını senkronize eder
-async fn sync_ledger_to_r2() {
+/// Yapılandırılmış rclone hedefine (R2_ERASURE_REMOTE) imha ledger'ını senkronize eder
+async fn sync_ledger_to_r2(remote: &str) {
     if !Path::new(LOCAL_LEDGER_PATH).exists() {
         return;
     }
 
-    let status = tokio::task::spawn_blocking(|| {
+    let remote_owned = remote.to_string();
+    let status = tokio::task::spawn_blocking(move || {
         std::process::Command::new("rclone")
-            .args(["copyto", LOCAL_LEDGER_PATH, R2_REMOTE_DEST])
+            .args(["copyto", LOCAL_LEDGER_PATH, &remote_owned])
             .status()
     })
     .await;
 
     match status {
         Ok(Ok(s)) if s.success() => {
-            tracing::info!("İmha ledger'ı başarıyla R2'ye senkronize edildi ({})", R2_REMOTE_DEST);
+            tracing::info!("İmha ledger'ı başarıyla senkronize edildi ({})", remote);
         }
         Ok(Ok(s)) => {
-            tracing::warn!("R2 imha ledger senkronizasyonu hata verdi (çıkış kodu: {:?})", s.code());
+            tracing::warn!("İmha ledger senkronizasyonu hata verdi (çıkış kodu: {:?})", s.code());
         }
         Ok(Err(e)) => {
             tracing::debug!("rclone çalıştırılamadı (yerel ledger güncel): {}", e);
@@ -116,21 +121,28 @@ async fn sync_ledger_to_r2() {
     }
 }
 
-/// Sunucu açılışında R2'den en güncel imha ledger'ını indirir ve
-/// eski bir yedekten dönülmüş olabilecek "hayalet" (ghost) kullanıcıları tekrar imha eder.
-pub async fn apply_erasure_ledger_on_startup(pool: &SqlitePool) {
-    // 1. R2'den en güncel ledger'ı çekmeyi dene
-    let download = tokio::task::spawn_blocking(|| {
-        std::process::Command::new("rclone")
-            .args(["copyto", R2_REMOTE_DEST, LOCAL_LEDGER_PATH])
-            .status()
-    })
-    .await;
+/// Sunucu açılışında (yapılandırılmışsa) uzak ledger'ı indirir ve eski bir
+/// yedekten dönülmüş olabilecek "hayalet" (ghost) kullanıcıları tekrar imha eder.
+/// `r2_remote` boşsa (varsayılan, açık kaynak self-host durumu) indirme adımı
+/// atlanır, sadece yerel ledger dosyası (varsa) okunur.
+pub async fn apply_erasure_ledger_on_startup(pool: &SqlitePool, r2_remote: Option<&str>) {
+    // 1. Yapılandırılmışsa uzak remote'tan en güncel ledger'ı çekmeyi dene
+    if let Some(remote) = r2_remote {
+        let remote_owned = remote.to_string();
+        let download = tokio::task::spawn_blocking(move || {
+            std::process::Command::new("rclone")
+                .args(["copyto", &remote_owned, LOCAL_LEDGER_PATH])
+                .status()
+        })
+        .await;
 
-    if let Ok(Ok(s)) = download {
-        if s.success() {
-            tracing::info!("R2'den en güncel imha ledger'ı başarıyla indirildi.");
+        if let Ok(Ok(s)) = download {
+            if s.success() {
+                tracing::info!("Uzak imha ledger'ı başarıyla indirildi.");
+            }
         }
+    } else {
+        tracing::debug!("R2_ERASURE_REMOTE tanımlı değil, yalnızca yerel imha ledger'ı kullanılıyor.");
     }
 
     if !Path::new(LOCAL_LEDGER_PATH).exists() {

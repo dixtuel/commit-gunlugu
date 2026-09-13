@@ -374,11 +374,13 @@
     }
   ];
 
+  // Tek sahnelenmiş dönüşüm anı: ham terminal önce söner, sonra günlük
+  // kaydı hafif bir gecikmeyle "mühürlenir" — sebep-sonuç sırasını taklit
+  // eder. prefers-reduced-motion global kuralla zaten sıfırlanıyor.
   function switchPreviewExample(index) {
     const item = demoData[index];
     if (!item) return;
 
-    // Update active scenario pill
     document.querySelectorAll('.scenario-pill').forEach((btn, i) => {
       btn.classList.toggle('active', i === index);
     });
@@ -386,19 +388,35 @@
     const terminalEl = document.getElementById('demo-terminal');
     const branchEl = document.getElementById('demo-branch');
     const statusEl = document.getElementById('demo-status');
+    const cardEl = document.getElementById('demo-card');
     const pillEl = document.getElementById('demo-pill');
     const titleEl = document.getElementById('demo-title');
     const bodyEl = document.getElementById('demo-body');
 
-    if (terminalEl) terminalEl.innerHTML = item.cmd;
-    if (branchEl) branchEl.textContent = item.branch;
-    if (statusEl) statusEl.textContent = item.status;
-    if (pillEl) {
-      pillEl.className = item.pillClass;
-      pillEl.textContent = item.pillText;
-    }
-    if (titleEl) titleEl.textContent = item.title;
-    if (bodyEl) bodyEl.textContent = item.body;
+    if (terminalEl) terminalEl.classList.add('is-rewriting');
+    if (cardEl) cardEl.classList.remove('is-stamped');
+
+    setTimeout(() => {
+      if (terminalEl) terminalEl.innerHTML = item.cmd;
+      if (branchEl) branchEl.textContent = item.branch;
+      if (statusEl) statusEl.textContent = item.status;
+      if (terminalEl) terminalEl.classList.remove('is-rewriting');
+
+      setTimeout(() => {
+        if (pillEl) {
+          pillEl.className = item.pillClass;
+          pillEl.textContent = item.pillText;
+        }
+        if (titleEl) titleEl.textContent = item.title;
+        if (bodyEl) bodyEl.textContent = item.body;
+        if (cardEl) cardEl.classList.add('is-stamped');
+      }, 220);
+    }, 160);
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const cardEl = document.getElementById('demo-card');
+    if (cardEl) requestAnimationFrame(() => cardEl.classList.add('is-stamped'));
+  });
 </script>
 {% endblock %}

@@ -78,6 +78,22 @@ pub async fn create_user(pool: &DbPool, user: &User) -> Result<(), AppError> {
     Ok(())
 }
 
+pub async fn update_user_profile(
+    pool: &DbPool,
+    user_id: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?",
+    )
+    .bind(name)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn update_user_password(
     pool: &DbPool,
     user_id: &str,

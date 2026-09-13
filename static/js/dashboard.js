@@ -4,6 +4,111 @@
 let currentEditingProjectId = null;
 let currentDeletingProjectId = null;
 
+// ---------------------------------------------------------------------------
+// SEKME GEZİNMESİ (Genel Bakış / Depolar / Entegrasyonlar / Hesap Ayarları)
+// Masaüstünde yatay buton şeridi, dar ekranda native <select> dropdown'a
+// düşer (documenso'nun mobil ayarlar deseninden esinlenilmiştir).
+// ---------------------------------------------------------------------------
+function activateTab(tabId, updateHash = true) {
+  const validTabs = ["overview", "repos", "integrations", "account"];
+  if (!validTabs.includes(tabId)) tabId = "overview";
+
+  document.querySelectorAll(".tab-panel").forEach(panel => {
+    const isActive = panel.getAttribute("data-panel") === tabId;
+    panel.hidden = !isActive;
+    panel.classList.toggle("active", isActive);
+  });
+
+  document.querySelectorAll(".dash-tab").forEach(btn => {
+    const isActive = btn.getAttribute("data-tab") === tabId;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  const select = document.querySelector(".dash-tabs-select");
+  if (select) select.value = tabId;
+
+  if (updateHash) {
+    history.replaceState(null, "", `#${tabId}`);
+  }
+}
+
+function initDashboardTabs() {
+  document.querySelectorAll(".dash-tab").forEach(btn => {
+    btn.addEventListener("click", () => activateTab(btn.getAttribute("data-tab")));
+  });
+
+  const select = document.querySelector(".dash-tabs-select");
+  if (select) {
+    select.addEventListener("change", () => activateTab(select.value));
+  }
+
+  const initialTab = (window.location.hash || "").replace("#", "");
+  activateTab(initialTab || "overview", false);
+}
+
+document.addEventListener("DOMContentLoaded", initDashboardTabs);
+window.addEventListener("hashchange", () => {
+  activateTab((window.location.hash || "").replace("#", ""), false);
+});
+
+// ---------------------------------------------------------------------------
+// PROFİL & ŞİFRE (Hesap Ayarları sekmesi)
+// ---------------------------------------------------------------------------
+async function submitProfileForm(e) {
+  e.preventDefault();
+  const name = document.getElementById("profile_name").value.trim();
+
+  try {
+    const res = await fetch("/api/user/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast("Profil güncellendi.");
+    } else {
+      showToast(data.message || "Profil güncellenemedi.", "error");
+    }
+  } catch (err) {
+    showToast("Sunucuya ulaşılamadı.", "error");
+  }
+}
+
+async function submitChangePasswordForm(e) {
+  e.preventDefault();
+  const currentPassword = document.getElementById("current_password").value;
+  const newPassword = document.getElementById("new_password").value;
+  const newPasswordConfirm = document.getElementById("new_password_confirm").value;
+
+  if (newPassword !== newPasswordConfirm) {
+    showToast("Yeni şifreler birbiriyle eşleşmiyor.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/user/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirm: newPasswordConfirm
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast("Şifreniz güncellendi.");
+      document.getElementById("change-password-form").reset();
+    } else {
+      showToast(data.message || "Şifre güncellenemedi.", "error");
+    }
+  } catch (err) {
+    showToast("Sunucuya ulaşılamadı.", "error");
+  }
+}
+
 function showToast(message, type = "success") {
   let container = document.getElementById("toast-container");
   if (!container) {

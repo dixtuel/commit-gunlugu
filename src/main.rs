@@ -14,6 +14,7 @@ mod auth;
 mod config;
 mod crypto;
 mod db;
+mod email;
 mod error;
 mod llm;
 mod middleware;
@@ -44,9 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Veritabanı ve migrasyon başlatıcı
     let db_pool = init_db(&config.database_url).await?;
 
-    // 2. KVKK İmha Ledger'ı & R2 Restore Replay Hook'u
-    // (Eski bir SQLite yedeğinden veya R2 dump'ından dönülmüşse, silinen kullanıcıları otomatik tekrar imha eder)
-    auth::erasure::apply_erasure_ledger_on_startup(&db_pool).await;
+    // 2. KVKK İmha Ledger'ı & Restore Replay Hook'u
+    // (Eski bir SQLite yedeğinden dönülmüşse, silinen kullanıcıları otomatik tekrar imha eder)
+    auth::erasure::apply_erasure_ledger_on_startup(&db_pool, config.r2_erasure_remote.as_deref()).await;
 
     // 3. Minijinja şablon motoru
     let mut jinja_env = minijinja::Environment::new();
@@ -88,6 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/projects/:id/delete", post(routes::api::delete_project_handler))
         .route("/api/v1/projects/:id/entries", post(routes::api::create_manual_entry_handler))
         .route("/api/v1/projects/:id/sync-github", post(routes::api::sync_github_commits_handler))
+        .route("/api/user/profile", post(routes::auth::update_profile_handler))
+        .route("/api/user/change-password", post(routes::auth::change_password_handler))
         .route("/api/user/delete-account", post(routes::auth::delete_account_handler));
 
     // Kimlik Doğrulama (Auth) rotaları

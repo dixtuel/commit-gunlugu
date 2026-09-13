@@ -27,7 +27,10 @@ Geliştiriciler kod yazar, ancak son kullanıcılar teknik git commit mesajları
 - 🧠 **3 Kademeli AI Fallback Zinciri:** NVIDIA NIM &rarr; Mikoshi AI Gateway &rarr; Sıfır hatayla çalışan Deterministik Conventional Commits kural motoru.
 - 🛡️ **Tavizsiz Güvenlik & DDoS Koruması:** Sabit zamanlı HMAC-SHA256 doğrulama, Leaky-Bucket IP hız kısıtlaması (`tower_governor`), SQL injection bağışıklığı.
 - 🔒 **KVKK & E-posta Maskeleme:** Ham webhook verilerindeki `author.email` ve kişisel e-postalar işleme kapısında ayıklanır; kamuya açık changelog'a asla sızdırılmaz.
-- 🗄️ **İmha Ledger'ı & R2 Yedek Koruması:** KVKK kapsamında silinen hesaplar bağımsız imha ledger'ına kaydedilir; felaket kurtarma senaryosunda eski bir R2 yedeğinden geri yükleme yapılsa dahi silinmiş hesapların dirilmesini (ghost account) otomatik olarak engeller.
+- 🗄️ **İmha Ledger'ı & Opsiyonel Bulut Yedek Koruması:** KVKK kapsamında silinen hesaplar bağımsız imha ledger'ına kaydedilir; `R2_ERASURE_REMOTE` ile **kendi** rclone remote'unuzu tanımlarsanız felaket kurtarma senaryosunda eski bir yedekten geri yükleme yapılsa dahi silinmiş hesapların dirilmesini (ghost account) otomatik olarak engeller. Hiçbir paylaşılan/varsayılan bulut kimlik bilgisi projeye gömülü değildir.
+- 🔐 **At-Rest Token Şifreleme:** Kullanıcıların özel repo'lar için girdiği GitHub PAT'leri `TOKEN_ENCRYPTION_KEY` ile AES-256-GCM kullanılarak şifrelenmiş biçimde saklanır.
+- ✉️ **Opsiyonel SMTP ile Şifre Sıfırlama:** `SMTP_HOST` tanımlarsanız (kendi mail sunucunuz, Postfix, SendGrid, Postmark vb.) şifre sıfırlama bağlantıları gerçek e-posta ile gönderilir; tanımlamazsanız bağlantı yalnızca sunucu logunda görünür.
+- 📱 **Mobil-Öncelikli, Sekmeli Panel:** Kontrol paneli Genel Bakış / Depolar / Entegrasyonlar / Hesap Ayarları sekmelerine ayrılmıştır; dar ekranlarda sekmeler native dropdown'a düşer, modallar tam ekran açılır.
 - 📦 **Gömülebilir Hafif Widget:** &lt;15KB Vanilla JS ve Shadow DOM ile ana sitenizin CSS stilleriyle çakışmadan tek satır script ile entegre edilir.
 
 ---
@@ -57,7 +60,8 @@ graph TD
 
     subgraph "Veri ve Kalıcılık Katmanı"
         TaskQueue --> SQLx[(SQLx SQLite WAL - Zero Config / Embedded)]
-        SQLx --> ErasureLedger[(KVKK İmha Ledger'ı & R2 Restore Sync)]
+        SQLx --> ErasureLedger[(KVKK İmha Ledger'ı - Opsiyonel rclone Sync)]
+        SQLx --> TokenCrypto[(AES-256-GCM Şifreli GitHub PAT'ler)]
     end
 
     subgraph "Sunum ve İstemci Katmanı"
@@ -80,7 +84,9 @@ graph TD
 | **Kimlik Doğrulama** | Argon2id & HttpOnly Cookies | OWASP standartlarında parola hashleme ve kriptografik oturum yönetimi |
 | **Hız Sınırlayıcı** | Tower Governor 0.4 | Smart-IP tabanlı Leaky-Bucket DoS ve brute-force koruması |
 | **İmza Doğrulama** | HMAC-SHA256 & Subtle 2.6 | Zamanlama saldırılarına karşı sabit zamanlı (constant-time) doğrulama |
-| **Veri İmhası** | KVKK Erasure Ledger & R2 Sync | Yedekten kurtarma sonrası dahi silinen kullanıcıların dirilmesini önleyen hook |
+| **Veri İmhası** | KVKK Erasure Ledger & Opsiyonel rclone Sync | Yedekten kurtarma sonrası dahi silinen kullanıcıların dirilmesini önleyen hook |
+| **Token Şifreleme** | AES-256-GCM (`aes-gcm` crate) | Kullanıcıların özel GitHub PAT'lerini at-rest şifreler |
+| **E-posta** | `lettre` (opsiyonel SMTP) | Şifre sıfırlama bağlantısını gerçek e-postayla gönderir |
 
 ---
 
@@ -103,8 +109,10 @@ Web sitenize veya SaaS ürününüze yenilikler bildirim rozetini eklemek için 
 
 1. **GitHub Webhook İmza Doğrulaması:** GitHub'dan gelen tüm payload'lar `X-Hub-Signature-256` başlığı üzerinden gizli anahtarla doğrulanır. Zamanlama saldırılarını engellemek amacıyla `subtle::ConstantTimeEq` kullanılır.
 2. **Kişisel E-posta Maskeleme:** Commit mesajlarında veya yazar üst verilerinde yer alan `author.email` ve `committer.email` adresleri kapıda ayıklanır, public changelog (`/c/:slug`) veya widget JSON çıktısına asla sızdırılmaz.
-3. **KVKK Uyumlu Hesap Silme & İmha Ledger'ı:** Kullanıcı hesabını sildiğinde tüm ilişkili projeleri ve verileri veritabanından kalıcı olarak silinir (`ON DELETE CASCADE`). E-posta adresinin SHA-256 özeti `data/erasure-ledger.jsonl` kütüğüne yazılır ve Cloudflare R2'ye bağımsız kopyalanır. Bir felaket kurtarma anında eski bir SQLite yedeğinden dönülse dahi sunucu açılışında silinmiş hesaplar tespit edilerek anında yeniden imha edilir.
-4. **Çerez Güvenliği:** Yalnızca oturum için zorunlu `cg_session` çerezi kullanılır (`HttpOnly`, `SameSite=Lax`, `Secure`). Üçüncü taraf reklam ve izleme çerezi kesinlikle yer almaz.
+3. **KVKK Uyumlu Hesap Silme & İmha Ledger'ı:** Kullanıcı hesabını sildiğinde tüm ilişkili projeleri ve verileri veritabanından kalıcı olarak silinir (`ON DELETE CASCADE`). E-posta adresinin SHA-256 özeti `data/erasure-ledger.jsonl` kütüğüne yazılır. `R2_ERASURE_REMOTE` ortam değişkeniyle **kendi** rclone remote'unuzu tanımlarsanız ledger ayrıca oraya kopyalanır — proje hiçbir paylaşılan bulut kimlik bilgisiyle gelmez. Bir felaket kurtarma anında eski bir SQLite yedeğinden dönülse dahi (uzak ledger yapılandırılmışsa) sunucu açılışında silinmiş hesaplar tespit edilerek anında yeniden imha edilir.
+4. **At-Rest Token Şifreleme:** Kullanıcıların özel/private repo'lar için girdiği GitHub PAT'leri, `.env`'deki `TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32` ile üretilir) tanımlıysa AES-256-GCM ile şifrelenerek veritabanına yazılır; tanımlı değilse geliştirme kolaylığı için düz metin saklanır.
+5. **Çerez Güvenliği:** Yalnızca oturum için zorunlu `cg_session` çerezi kullanılır (`HttpOnly`, `SameSite=Lax`, `Secure`). Üçüncü taraf reklam ve izleme çerezi kesinlikle yer almaz.
+6. **Minimum Yetkili GitHub Token'ları:** Sunucunun kendi `GITHUB_TOKEN`'ı yalnızca public repo rate limitini yükseltmek içindir, **hiçbir scope/yetki gerektirmez**. Kullanıcıların panelden girdiği kişisel token ise yalnızca ilgili repoyu okuyabilmelidir — fine-grained PAT ile sadece o repo + `Contents: Read-only` izni önerilir.
 
 ---
 

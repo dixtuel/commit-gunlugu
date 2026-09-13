@@ -19,7 +19,7 @@ use crate::auth::session::{
 use crate::db::models::User;
 use crate::db::{
     create_password_reset, create_user, find_user_by_email, find_valid_password_reset,
-    mark_password_reset_used, update_user_password,
+    mark_password_reset_used, update_user_password, update_user_profile,
 };
 use crate::error::AppError;
 use crate::state::AppState;
@@ -251,10 +251,13 @@ pub async fn forgot_password_submit(
         let _ = create_password_reset(&state.db, &reset_id, &user.id, &token_hash, &expires_at).await;
 
         let reset_link = format!("{}/reset-password?token={}", state.config.app_url.trim_end_matches('/'), raw_token);
-        tracing::info!(
-            "🔑 ŞİFRE SIFIRLAMA BAĞLANTISI [{}]: {}",
-            email, reset_link
-        );
+
+        let sent = crate::email::send_password_reset_email(&state.config, &email, &reset_link).await;
+        if !sent {
+            // SMTP göndergesi başarısız olduysa (ör. yerel MTA yapılandırılmamış
+            // bir geliştirme ortamı) bağlantıyı sunucu logunda görünür bırak.
+            tracing::info!("Şifre sıfırlama bağlantısı [{}]: {}", email, reset_link);
+        }
     }
 
     // Kullanıcı sayma (enumeration) saldırısını önlemek için her durumda aynı başarılı mesaj
@@ -385,6 +388,90 @@ pub async fn reset_password_submit(
 }
 
 // ---------------------------------------------------------------------------
+// PROFİL GÜNCELLEME (AD SOYAD)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct UpdateProfileForm {
+    pub name: String,
+}
+
+pub async fn update_profile_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::Json(form): axum::Json<UpdateProfileForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    let name = form.name.trim();
+    if name.is_empty() {
+        return Err(AppError::BadRequest("Ad alanı boş bırakılamaz.".to_string()));
+    }
+    if name.len() > 80 {
+        return Err(AppError::BadRequest("Ad en fazla 80 karakter olabilir.".to_string()));
+    }
+
+    update_user_profile(&state.db, &user.id, name).await?;
+
+    Ok(axum::Json(serde_json::json!({ "success": true, "name": name })))
+}
+
+// ---------------------------------------------------------------------------
+// ŞİFRE DEĞİŞTİRME (OTURUM AÇIKKEN)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct ChangePasswordForm {
+    pub current_password: String,
+    pub new_password: String,
+    pub new_password_confirm: String,
+}
+
+pub async fn change_password_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::Json(form): axum::Json<ChangePasswordForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    if !verify_password(&form.current_password, &user.password_hash) {
+        return Err(AppError::Unauthorized("Mevcut şifreniz hatalı.".to_string()));
+    }
+
+    if form.new_password.len() < 8 {
+        return Err(AppError::BadRequest("Yeni şifreniz en az 8 karakter olmalıdır.".to_string()));
+    }
+
+    if form.new_password != form.new_password_confirm {
+        return Err(AppError::BadRequest("Yeni şifreler birbiriyle eşleşmiyor.".to_string()));
+    }
+
+    let new_hash = hash_password(&form.new_password)?;
+    update_user_password(&state.db, &user.id, &new_hash).await?;
+
+    // Güvenlik: bu oturum dışındaki tüm oturumları kapat, mevcut oturumu koru
+    destroy_all_user_sessions(&state.db, &user.id).await?;
+    let new_session_token = create_session(&state.db, &user.id).await?;
+    let cookie = make_cookie_header(&new_session_token, &state.config.app_url);
+
+    let mut resp = axum::Json(serde_json::json!({ "success": true })).into_response();
+    resp.headers_mut().insert(
+        header::SET_COOKIE,
+        cookie.parse().map_err(|e| AppError::Internal(format!("Cookie hatası: {}", e)))?,
+    );
+
+    Ok(resp)
+}
+
+// ---------------------------------------------------------------------------
 // KVKK UYUMLU HESAP VE VERİ İMHASI (DELETE ACCOUNT)
 // ---------------------------------------------------------------------------
 
@@ -413,8 +500,14 @@ pub async fn delete_account_handler(
         return Err(AppError::Unauthorized("Girdiğiniz şifre hatalı. Hesap silinemedi.".to_string()));
     }
 
-    // KVKK Kalıcı İmha & R2 Ledger Senkronizasyonu
-    crate::auth::erasure::purge_user(&state.db, &user.id, &user.email).await?;
+    // KVKK Kalıcı İmha & (yapılandırılmışsa) Uzak Ledger Senkronizasyonu
+    crate::auth::erasure::purge_user(
+        &state.db,
+        &user.id,
+        &user.email,
+        state.config.r2_erasure_remote.clone(),
+    )
+    .await?;
 
     let cookie = make_logout_cookie();
     let mut resp = Redirect::to("/login?deleted=true").into_response();

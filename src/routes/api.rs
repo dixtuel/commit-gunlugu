@@ -9,6 +9,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::session::{extract_session_token, get_user_from_session};
+use crate::crypto::token::{decrypt_token, encrypt_token_for_storage};
 use crate::db::models::{Project, WidgetBrand, WidgetEntry, WidgetPayload};
 use crate::db::{
     find_project_by_widget_key, list_all_projects, list_entries_for_project,
@@ -171,7 +172,8 @@ pub async fn create_project_handler(
     let custom_token = payload
         .custom_github_token
         .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
+        .filter(|t| !t.is_empty())
+        .map(|t| encrypt_token_for_storage(&t, state.config.token_encryption_key.as_deref()));
 
     if is_private && custom_token.is_none() {
         return Err(AppError::BadRequest(
@@ -191,7 +193,7 @@ pub async fn create_project_handler(
         slug,
         widget_key: format!("w_{}", Uuid::new_v4().simple()),
         brand_name: None,
-        brand_color: payload.brand_color.unwrap_or_else(|| "#2563eb".to_string()),
+        brand_color: payload.brand_color.unwrap_or_else(|| "#5b8a7a".to_string()),
         brand_logo_url: None,
         webhook_secret: state.config.default_webhook_secret.clone(),
         parse_mode: payload.parse_mode.unwrap_or_else(|| "ai_editorial".to_string()),
@@ -250,7 +252,8 @@ pub async fn update_project_settings_handler(
     let custom_token_owned = payload
         .custom_github_token
         .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
+        .filter(|t| !t.is_empty())
+        .map(|t| encrypt_token_for_storage(&t, state.config.token_encryption_key.as_deref()));
 
     let effective_custom_token = custom_token_owned
         .as_deref()
@@ -390,16 +393,10 @@ pub async fn sync_github_commits_handler(
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
 
-    let effective_token = if let Some(ref t) = project.custom_github_token {
-        let trimmed = t.trim();
-        if !trimmed.is_empty() {
-            Some(trimmed.to_string())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let effective_token = project.custom_github_token.as_deref().and_then(|t| {
+        let decrypted = decrypt_token(t.trim(), state.config.token_encryption_key.as_deref());
+        if decrypted.is_empty() { None } else { Some(decrypted) }
+    });
 
     let bearer_token = match effective_token {
         Some(t) => Some(t),
