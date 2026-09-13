@@ -133,21 +133,11 @@ cargo run
 
 Sunucu varsayılan olarak `http://127.0.0.1:8095` adresinde dinlemeye başlar.
 
----
+## 🎯 Hızlı Başlangıç (3 Adımda Kullanım)
 
-## 🏅 GitHub Developer Program Üyelik Kılavuzu
-
-1. Hesabınızda 2FA ve doğrulanmış e-postanın aktif olduğundan emin olun.
-2. [GitHub Developer Settings &rarr; GitHub Apps](https://github.com/settings/apps/new) sayfasına gidin.
-3. **App Name:** `Commit Günlüğü`
-4. **Homepage URL:** `https://commit.dixtuel.tr`
-5. **Webhook URL:** `https://commit.dixtuel.tr/api/v1/webhook`
-6. **Webhook Secret:** `.env` dosyanızdaki `GITHUB_WEBHOOK_SECRET`
-7. **İzinler:**
-   - `Contents`: Read-only
-   - `Pull requests`: Read-only
-8. **Events:** `Push`, `Pull request` seçeneklerini işaretleyip kaydedin.
-9. [github.com/settings/developer_program](https://github.com/settings/developer_program) sayfasına giderek başvuru formunu onaylayın. Profilinize **Developer Program Member** rozeti anında eklenecektir.
+1. **Hesap Oluşturun:** [commit.dixtuel.tr](https://commit.dixtuel.tr) adresine gidin, hesabınızı oluşturun ve yeni bir proje ekleyin.
+2. **GitHub Webhook'unu Ekleyin:** GitHub deponuzun **Settings &rarr; Webhooks** sekmesine giderek size verilen Webhook URL ve Gizli Anahtarı (Secret) yapıştırın, `push` olayını aktif edin.
+3. **Yayınlayın & Gömün:** Yapay zeka tarafından hazırlanan sürüm notlarınızı inceleyin, sitenize tek satır `<script>` widget'ı ekleyerek veya doğrudan `/c/:slug` linkinizi paylaşarak müşterilerinize duyurun!
 
 ---
 
