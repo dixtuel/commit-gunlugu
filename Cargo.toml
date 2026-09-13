@@ -1,0 +1,42 @@
+[package]
+name = "commit-gunlugu"
+version = "0.1.0"
+edition = "2021"
+authors = ["dixtuel <asrin@sely.tr>"]
+description = "High-performance AI changelog engine and GitHub Developer Program integration in Rust"
+license = "MIT"
+
+[[bin]]
+name = "commit-gunlugu"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["json", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "cors", "set-header"] }
+tower_governor = "0.4"
+governor = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "uuid", "macros", "migrate"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+subtle = "2.5"
+rand = "0.8"
+regex = "1"
+minijinja = { version = "2", features = ["loader"] }
+argon2 = "0.6.0"
+password-hash = "0.6.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

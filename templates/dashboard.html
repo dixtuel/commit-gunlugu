@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Kontrol Paneli — Commit Günlüğü{% endblock %}
+
+{% block content %}
+<div class="container dashboard-container">
+  <div class="dashboard-header">
+    <div>
+      <h1 class="page-title">Sürüm Günlüğü Yönetimi</h1>
+      <p class="page-desc">Hoş geldiniz, <strong>{{ current_user.name or current_user.email }}</strong> &bull; Projelerinizi ve changelog taslaklarınızı yönetin.</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Hesap & KVKK Ayarları</button>
+      <button class="btn btn-primary" onclick="toggleModal('project-modal')">+ Yeni Proje Ekle</button>
+    </div>
+  </div>
+
+  <div class="dashboard-layout">
+    <div class="main-column">
+      <div class="card">
+        <div class="card-header">
+          <h3>Gelen Taslaklar ve Günlükler</h3>
+          <span class="badge">{{ entries | length }} Kayıt</span>
+        </div>
+        <div class="card-body">
+          {% if entries %}
+          <div class="entries-list">
+            {% for e in entries %}
+            <div class="entry-item entry-status-{{ e.status | lower }}" id="entry-{{ e.id }}">
+              <div class="entry-meta">
+                <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
+                <span class="status-pill status-{{ e.status | lower }}">{{ e.status }}</span>
+                {% if e.author_username %}
+                <span class="author-tag">{{ e.author_username }}</span>
+                {% endif %}
+                <span class="date-tag">{{ e.created_at[:10] }}</span>
+              </div>
+              <h4 class="entry-title">{{ e.title }}</h4>
+              <p class="entry-body">{{ e.body }}</p>
+              
+              <div class="entry-actions">
+                {% if e.status == "DRAFT" %}
+                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">✓ Yayınla</button>
+                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">✕ Yoksay</button>
+                {% elif e.status == "PUBLISHED" %}
+                <span class="published-label">Yayında</span>
+                <button class="btn-action btn-dismiss" onclick="updateStatus('{{ e.id }}', 'dismiss')">Kaldır</button>
+                {% else %}
+                <span class="dismissed-label">Yoksayıldı</span>
+                <button class="btn-action btn-publish" onclick="updateStatus('{{ e.id }}', 'publish')">Yeniden Yayınla</button>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state">
+            <p>Henüz işlenmiş bir commit veya PR bulunmuyor. GitHub Webhook ayarlandığında gelen olaylar otomatik taslağa dönüşecektir.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="side-column">
+      <div class="card">
+        <div class="card-header">
+          <h3>Kayıtlı Projeleriniz</h3>
+        </div>
+        <div class="card-body">
+          {% if projects %}
+          <ul class="side-projects-list">
+            {% for p in projects %}
+            <li class="side-project-item">
+              <div class="side-project-title">
+                <span class="color-dot" style="background-color: {{ p.brand_color }}"></span>
+                <strong>{{ p.name }}</strong>
+              </div>
+              <small class="text-muted">{{ p.github_repo_full_name }}</small>
+              <div class="side-project-actions">
+                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Changelog &rarr;</a>
+                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted">Henüz kayıtlı bir projeniz yok. Sağ üstteki "+ Yeni Proje Ekle" butonunu kullanabilirsiniz.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card webhook-helper-card">
+        <div class="card-header">
+          <h3>GitHub Webhook Kurulumu</h3>
+        </div>
+        <div class="card-body">
+          <p class="text-sm">GitHub reponuzun <strong>Settings &rarr; Webhooks</strong> sayfasına gidin:</p>
+          <div class="code-box">
+            <span class="code-label">Payload URL:</span>
+            <code>{{ app_url }}/api/v1/webhook</code>
+          </div>
+          <div class="code-box">
+            <span class="code-label">Content type:</span>
+            <code>application/json</code>
+          </div>
+          <div class="code-box">
+            <span class="code-label">Secret:</span>
+            <code>.env'deki GITHUB_WEBHOOK_SECRET</code>
+          </div>
+          <p class="text-sm">Events: <strong>Pushes</strong> ve <strong>Pull requests</strong> seçeneğini işaretleyin.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Yeni Proje Modalı -->
+<div id="project-modal" class="modal" style="display:none;">
+  <div class="modal-backdrop" onclick="toggleModal('project-modal')"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yeni Proje Ekle</h3>
+      <button class="close-btn" onclick="toggleModal('project-modal')">&times;</button>
+    </div>
+    <form id="create-project-form" onsubmit="submitNewProject(event)">
+      <div class="form-group">
+        <label>GitHub Repo (Owner/Repo)</label>
+        <input type="text" id="repo_name" name="repo_name" placeholder="ör. dixtuel/commit-gunlugu" required class="input-text">
+      </div>
+      <div class="form-group">
+        <label>Görünen Proje Adı</label>
+        <input type="text" id="proj_name" name="proj_name" placeholder="ör. Commit Günlüğü" required class="input-text">
+      </div>
+      <div class="form-group">
+        <label>Marka Rengi (Hex)</label>
+        <input type="color" id="brand_color" name="brand_color" value="#10b981" class="input-color">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="toggleModal('project-modal')">İptal</button>
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- KVKK Hesap Silme Modalı -->
+<div id="delete-account-modal" class="modal" style="display:none;">
+  <div class="modal-backdrop" onclick="toggleModal('delete-account-modal')"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 style="color: var(--danger);">Hesabı ve Tüm Verileri Kalıcı Sil</h3>
+      <button class="close-btn" onclick="toggleModal('delete-account-modal')">&times;</button>
+    </div>
+    <form method="POST" action="/api/user/delete-account">
+      <p class="text-sm" style="margin-bottom: 14px;">
+        <strong>6698 sayılı KVKK Madde 11 uyarınca Unutulma Hakkı:</strong> Hesabınızı sildiğinizde size ait tüm projeler,
+        sürüm günlüğü kayıtları ve oturumlar geri döndürülemez şekilde yok edilir.
+      </p>
+      <div class="alert alert-danger" style="font-size: 0.82rem; margin-bottom: 14px;">
+        🛡️ <strong>İmha Ledger'ı Koruması:</strong> Silme işlemi bağımsız imha ledger'ına (erasure ledger) ve Cloudflare R2 nesne deposuna işlenir.
+        Sunucu felaket kurtarma senaryosunda eski bir snapshot yedeğinden geri yüklense dahi hesabınız diriltilmeden otomatik imha edilir.
+      </div>
+      <div class="form-group">
+        <label>Mevcut Şifreniz</label>
+        <input type="password" name="password" required class="input-text" placeholder="••••••••">
+      </div>
+      <div class="form-group">
+        <label>Onaylamak için <code>HESABIMI SİL</code> yazın:</label>
+        <input type="text" name="confirm_text" required class="input-text" placeholder="HESABIMI SİL">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="toggleModal('delete-account-modal')">Vazgeç</button>
+        <button type="submit" class="btn btn-primary" style="background-color: var(--danger);">Kalıcı Olarak İmha Et</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

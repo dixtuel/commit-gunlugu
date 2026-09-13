@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Gizlilik Politikası ve KVKK Aydınlatma Metni — Commit Günlüğü{% endblock %}
+
+{% block content %}
+<div class="container legal-container">
+  <div class="legal-content">
+    <div class="legal-header">
+      <span class="hero-badge">Veri Güvenliği & KVKK</span>
+      <h1>Gizlilik Politikası ve Aydınlatma Metni</h1>
+      <p class="text-secondary">6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") Kapsamında Bilgilendirme &bull; Son güncelleme: 13 Eylül 2026</p>
+    </div>
+
+    <section class="legal-section">
+      <h2>1. Veri Sorumlusu</h2>
+      <p>
+        Bu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca veri sorumlusu sıfatıyla
+        <strong>Asrın Kılıç (dixtuel)</strong> tarafından işletilen <strong>Commit Günlüğü</strong> (<code>commit.dixtuel.tr</code>) platformuna ilişkindir.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>2. İşlenen Kişisel Veriler ve Toplama Yöntemleri</h2>
+      <p>Sistemimiz yalnızca hizmetin ifası için zorunlu olan asgari verileri işler:</p>
+      <ul class="legal-list">
+        <li><strong>Hesap Bilgileri:</strong> Kayıt olurken beyan ettiğiniz e-posta adresiniz, adınız/unvanınız ve Argon2id ile şifrelenmiş parola özetiniz.</li>
+        <li><strong>Teknik ve Oturum Verileri:</strong> Güvenlik, hız sınırlaması (DDoS önleme) ve yetkilendirme amacıyla istemci IP adresiniz ve oturum anahtarınız (<code>cg_session</code>).</li>
+        <li><strong>GitHub Depo ve Commit Bilgileri:</strong> Deponuzdan gelen commit mesajları, PR başlıkları ve herkese açık GitHub kullanıcı adı (<code>@kullaniciadi</code>).</li>
+      </ul>
+    </section>
+
+    <section class="legal-section highlight-box">
+      <h2>3. E-posta Maskeleme ve Gizlilik Garantisi</h2>
+      <p>
+        <strong>Kişisel e-postanız asla kamuya açılmaz:</strong> GitHub webhook'larından gelen ham yüklerde yer alan
+        <code>author.email</code> ve <code>committer.email</code> alanları, veri tabanına yazılmadan ve yapay zekaya gönderilmeden önce
+        <strong>işleme kapısında ayıklanır ve silinir</strong>.
+      </p>
+      <p>
+        Herkese açık sürüm günlüğü sayfanızda (<code>/c/:slug</code>) veya gömülebilir widget'ınızda kişisel e-posta adresleri kesinlikle gösterilmez.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>4. Çerez Politikası</h2>
+      <p>
+        Platformumuzda Google Analytics, Meta Pixel veya herhangi bir üçüncü taraf reklam/izleme çerezi <strong>kesinlikle bulunmaz</strong>.
+        Yalnızca oturumunuzu güvenle açık tutmak için zorunlu olan birinci taraf <code>cg_session</code> çerezi kullanılır
+        (<code>HttpOnly</code>, <code>SameSite=Lax</code> ve <code>Secure</code> bayraklarıyla korunur).
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>5. Veri Güvenliği ve İzolasyon</h2>
+      <p>
+        Tüm verileriniz SQLite WAL modunda çalışan izole sunucu mimarisinde saklanır. Kullanıcı projeleri birbirinden tam yetki ayrımıyla (Tenant Isolation) ayrılmıştır.
+        GitHub webhook bağlantıları sabit zamanlı HMAC-SHA256 doğrulamasıyla sahteciliğe karşı korunmaktadır.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>6. İlgili Kişi Olarak Haklarınız (KVKK Madde 11)</h2>
+      <p>KVKK'nın 11. maddesi uyarınca dilediğiniz zaman:</p>
+      <ul class="legal-list">
+        <li>Kişisel verilerinizin işlenip işlenmediğini öğrenme,</li>
+        <li>İşlenmişse buna ilişkin bilgi talep etme,</li>
+        <li>Eksik veya yanlış işlenmişse düzeltilmesini isteme,</li>
+        <li>Hesabınızın ve verilerinizin tamamen silinmesini talep etme haklarına sahipsiniz.</li>
+      </ul>
+    </section>
+
+    <div class="legal-footer">
+      <p>Veri haklarınıza ilişkin talepleriniz için <a href="https://github.com/dixtuel" target="_blank" class="text-link">github.com/dixtuel</a> üzerinden bize ulaşabilirsiniz.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

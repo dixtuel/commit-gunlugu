@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Commit Günlüğü — Akıllı GitHub Sürüm Notları & Changelog Motoru{% endblock %}</title>
+  <meta name="description" content="GitHub commit ve PR'larınızı yapay zeka ile son kullanıcı dostu, editoryal sürüm günlüğü notlarına dönüştüren ultra hızlı ve güvenli Rust motoru.">
+  <meta name="keywords" content="github changelog, commit günlüğü, release notes, yapay zeka sürüm notları, rust changelog, github app">
+  <meta name="author" content="Asrın Kılıç (dixtuel)">
+  <link rel="canonical" href="{{ app_url }}{% block canonical %}{% endblock %}">
+
+  <!-- OpenGraph Small Summary Card -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Commit Günlüğü">
+  <meta property="og:title" content="{% block og_title %}Commit Günlüğü — Akıllı GitHub Sürüm Notları{% endblock %}">
+  <meta property="og:description" content="{% block og_desc %}GitHub commit ve PR hareketlerinizden otomatik, temiz ve anlaşılır sürüm notları üretin.{% endblock %}">
+  <meta property="og:image" content="{{ app_url }}/static/img/og-small.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Commit Günlüğü Logo">
+
+  <!-- Twitter Small Summary Card (Compact Thumbnail) -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{% block tw_title %}Commit Günlüğü — Akıllı GitHub Sürüm Notları{% endblock %}">
+  <meta name="twitter:description" content="{% block tw_desc %}GitHub commit ve PR hareketlerinizden otomatik sürüm günlükleri üretin.{% endblock %}">
+  <meta name="twitter:image" content="{{ app_url }}/static/img/og-small.png">
+
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="brand">
+        <span class="brand-badge">⚡</span>
+        <span class="brand-text">Commit Günlüğü</span>
+      </a>
+      <nav class="site-nav">
+        <a href="/">Ana Sayfa</a>
+        {% if current_user %}
+        <a href="/dashboard">Kontrol Paneli</a>
+        <div class="nav-user-badge">
+          <span class="user-name">{{ current_user.name or current_user.email }}</span>
+          <a href="/logout" class="nav-logout-link" title="Oturumu Kapat">Çıkış Yap</a>
+        </div>
+        {% else %}
+        <a href="/login" class="nav-login-link">Giriş Yap</a>
+        <a href="/register" class="btn btn-sm btn-primary">Kayıt Ol</a>
+        {% endif %}
+        <a href="https://github.com/dixtuel/commit-gunlugu" target="_blank" rel="noopener" class="nav-github" title="GitHub Deposu">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-links">
+        <a href="/terms">Kullanım Şartları</a>
+        <span class="sep">&bull;</span>
+        <a href="/privacy">Gizlilik & KVKK</a>
+        <span class="sep">&bull;</span>
+        <a href="/sitemap.xml" target="_blank">Sitemap</a>
+        <span class="sep">&bull;</span>
+        <a href="https://github.com/settings/developer_program" target="_blank" rel="noopener">GitHub Developer Program</a>
+      </div>
+      <p class="footer-copy">&copy; 2026 Commit Günlüğü &bull; Rust & Axum ile geliştirilmiş yüksek performanslı editoryal sürüm günlüğü motoru.</p>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

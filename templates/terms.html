@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Kullanım Şartları — Commit Günlüğü{% endblock %}
+
+{% block content %}
+<div class="container legal-container">
+  <div class="legal-content">
+    <div class="legal-header">
+      <span class="hero-badge">Yasal Koşullar</span>
+      <h1>Kullanım Şartları</h1>
+      <p class="text-secondary">Son güncelleme: 13 Eylül 2026</p>
+    </div>
+
+    <section class="legal-section">
+      <h2>1. Hizmetin Tanımı ve Kapsamı</h2>
+      <p>
+        <strong>Commit Günlüğü</strong>, yazılım geliştiricilerinin ve ekiplerinin GitHub depolarındaki commit'leri ve Pull Request (PR) hareketlerini
+        analiz ederek son kullanıcı dostu sürüm notları (changelog) üreten, saklayan ve gömülebilir widget'lar aracılığıyla sunan açık kaynaklı bir geliştirici aracıdır.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>2. Hesap Güvenliği ve Kullanıcı Sorumlulukları</h2>
+      <p>
+        Platformda oluşturulan kullanıcı hesaplarının güvenliği, şifre gizliliği ve GitHub App webhook secret anahtarlarının korunması kullanıcının sorumluluğundadır.
+        Sistem; şifreleri Argon2id algoritmasıyla tek yönlü özetleyerek saklar; açık şifreler hiçbir zaman sunucu loglarına veya veritabanına yazılmaz.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>3. İçerik ve Fikri Mülkiyet</h2>
+      <p>
+        GitHub deponuzdan gelen commit mesajları, kod özetleri ve üretilen sürüm notları üzerindeki tüm fikri mülkiyet ve telif hakları tamamen size aittir.
+        Commit Günlüğü, bu içerikleri yalnızca sizin talimatınız doğrultusunda işler, saklar ve herkese açık changelog sayfanız veya widget'ınız üzerinden yansıtır.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>4. Adil Kullanım ve Hız Sınırlamaları (Rate Limiting)</h2>
+      <p>
+        Hizmetin kararlılığını ve yüksek erişilebilirliğini korumak amacıyla IP ve hesap bazlı hız sınırları uygulanmaktadır.
+        Herhangi bir brute-force saldırısı, tersine mühendislik veya DoS girişimi tespit edildiğinde sistem ilgili IP adresini otomatik olarak engeller.
+      </p>
+    </section>
+
+    <section class="legal-section">
+      <h2>5. Sorumluluğun Sınırlandırılması</h2>
+      <p>
+        Hizmet "olduğu gibi" (as-is) sunulmaktadır. Yapay zeka modelleri tarafından oluşturulan taslak metinlerin editoryal doğruluğunu kontrol etmek ve yayına almak kullanıcının sorumluluğundadır.
+      </p>
+    </section>
+
+    <div class="legal-footer">
+      <p>Sorularınız veya geri bildirimleriniz için <a href="https://github.com/dixtuel/commit-gunlugu/issues" target="_blank" class="text-link">GitHub Issues</a> üzerinden iletişime geçebilirsiniz.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

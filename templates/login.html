@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Giriş Yap — Commit Günlüğü{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="brand-badge" style="font-size: 2rem; margin-bottom: 8px;">⚡</div>
+      <h2>Hesabınıza Giriş Yapın</h2>
+      <p class="text-secondary">Sürüm günlüklerinizi ve GitHub entegrasyonlarınızı yönetin</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login" class="auth-form">
+      <div class="form-group">
+        <label for="email">E-posta Adresi</label>
+        <input type="email" id="email" name="email" value="{{ email or '' }}" required autofocus class="input-text" placeholder="ornek@alanadi.com">
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label for="password" style="margin-bottom: 0;">Şifre</label>
+          <a href="/forgot-password" class="auth-sublink">Şifremi unuttum</a>
+        </div>
+        <input type="password" id="password" name="password" required class="input-text" placeholder="••••••••">
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Giriş Yap</button>
+    </form>
+
+    <div class="auth-footer">
+      <p>Henüz hesabınız yok mu? <a href="/register" class="text-link">Hemen Kayıt Olun</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

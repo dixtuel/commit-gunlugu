@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project.brand_name or project.name }} — Sürüm Notları</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    :root {
+      --project-brand: {{ project.brand_color }};
+    }
+    .brand-accent {
+      color: var(--project-brand);
+    }
+    .brand-border {
+      border-color: var(--project-brand);
+    }
+  </style>
+</head>
+<body class="changelog-body">
+  <header class="changelog-header">
+    <div class="container">
+      <div class="changelog-brand-wrap">
+        {% if project.brand_logo_url %}
+        <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
+        {% endif %}
+        <div>
+          <h1 class="changelog-title">{{ project.brand_name or project.name }}</h1>
+          <p class="changelog-sub">En son güncellemeler, yeni özellikler ve hata düzeltmeleri</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container changelog-main">
+    {% if entries %}
+    <div class="timeline">
+      {% for e in entries %}
+      <article class="timeline-item">
+        <div class="timeline-marker brand-border"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
+            <time class="timeline-date">{{ (e.published_at or e.created_at)[:10] }}</time>
+            {% if e.author_username %}
+            <span class="timeline-author">{{ e.author_username }}</span>
+            {% endif %}
+          </div>
+          <h2 class="timeline-heading">{{ e.title }}</h2>
+          <div class="timeline-desc">
+            <p>{{ e.body }}</p>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <p>Bu proje için henüz yayınlanmış bir sürüm notu bulunmuyor.</p>
+    </div>
+    {% endif %}
+  </main>
+
+  <footer class="changelog-footer">
+    <div class="container">
+      <p><a href="{{ app_url }}" target="_blank" rel="noopener">⚡ Commit Günlüğü ile güçlendirilmiştir</a></p>
+    </div>
+  </footer>
+</body>
+</html>

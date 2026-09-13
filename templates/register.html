@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Kayıt Ol — Commit Günlüğü{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="brand-badge" style="font-size: 2rem; margin-bottom: 8px;">🚀</div>
+      <h2>Yeni Hesap Oluşturun</h2>
+      <p class="text-secondary">GitHub projeleriniz için otomatik changelog motorunu başlatın</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/register" class="auth-form">
+      <div class="form-group">
+        <label for="name">Ad Soyad / Unvan (İsteğe Bağlı)</label>
+        <input type="text" id="name" name="name" value="{{ name or '' }}" class="input-text" placeholder="Asrın Kılıç">
+      </div>
+
+      <div class="form-group">
+        <label for="email">E-posta Adresi</label>
+        <input type="email" id="email" name="email" value="{{ email or '' }}" required class="input-text" placeholder="ornek@alanadi.com">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Şifre (En az 8 karakter)</label>
+        <input type="password" id="password" name="password" required minlength="8" class="input-text" placeholder="••••••••">
+      </div>
+
+      <div class="form-group">
+        <label for="password_confirm">Şifre Tekrar</label>
+        <input type="password" id="password_confirm" name="password_confirm" required minlength="8" class="input-text" placeholder="••••••••">
+      </div>
+
+      <div class="form-checkbox">
+        <input type="checkbox" id="accept_terms" name="accept_terms" required>
+        <label for="accept_terms" style="font-size: 0.85rem; font-weight: normal; margin-bottom: 0;">
+          <a href="/terms" target="_blank" class="text-link">Kullanım Şartları</a>'nı ve 
+          <a href="/privacy" target="_blank" class="text-link">KVKK Gizlilik Politikası</a>'nı okudum, kabul ediyorum.
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Hesap Oluştur</button>
+    </form>
+
+    <div class="auth-footer">
+      <p>Zaten bir hesabınız var mı? <a href="/login" class="text-link">Giriş Yapın</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

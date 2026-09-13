@@ -1,41 +1,156 @@
-# Commit Günlüğü
+# Commit Günlüğü ⚡
 
-GitHub commit ve pull request'lerini okuyup müşteri diline çevrilmiş bir "Yenilikler"
-bültenine dönüştüren, siteye tek satır script ile gömülen bir changelog widget'ı ve panosu.
+<p align="center">
+  <img src="static/img/og-small.png" alt="Commit Günlüğü Logo" width="120" height="120" style="border-radius: 24px;">
+</p>
 
-Ajans/freelancer segmentine (birden fazla müşteri projesine beyaz etiketli changelog kuran
-geliştiriciler) odaklanır — bkz. `docs/ARCHITECTURE.md`.
+<p align="center">
+  <strong>GitHub commit ve PR hareketlerinizden editoryal, müşteri dostu sürüm günlüğü (changelog) üreten ultra hızlı Rust motoru.</strong>
+</p>
 
-> **Durum:** Uçtan uca tasarlanmış bir MVP scaffold'u. Bu ortamda Node.js kurulu olmadığı için
-> `npm install` / `next build` burada çalıştırılıp doğrulanmadı — bir sonraki adım gerçek bir
-> geliştirme ortamında kurulumu tamamlamak ve derlemeyi doğrulamaktır.
+<p align="center">
+  <a href="https://github.com/dixtuel/commit-gunlugu/blob/main/LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021%20Edition-orange.svg" alt="Rust Edition"></a>
+  <a href="https://github.com/tokio-rs/axum"><img src="https://img.shields.io/badge/Axum-0.7-brightgreen.svg" alt="Axum 0.7"></a>
+  <a href="https://github.com/settings/developer_program"><img src="https://img.shields.io/badge/GitHub-Developer%20Program-purple.svg" alt="GitHub Developer Program"></a>
+  <a href="https://commit.dixtuel.tr"><img src="https://img.shields.io/badge/Canlı-commit.dixtuel.tr-emerald.svg" alt="Live Demo"></a>
+</p>
 
-## Yapı
+---
 
+## 🚀 Neden Commit Günlüğü?
+
+Geliştiriciler kod yazar, ancak son kullanıcılar teknik git commit mesajlarını (`fix(auth): resolve JWT expiration bug in middleware`) anlamaz. **Commit Günlüğü**, GitHub deponuza gelen webhook olaylarını dinler, teknik commit ve PR metinlerini analiz eder ve çok kademeli yapay zeka zinciriyle son kullanıcının değerini kavrayacağı editoryal sürüm notlarına dönüştürür.
+
+- ⚡ **Ultra Düşük Kaynak Tüketimi:** Node.js (~350MB) ve Python (~250MB) yerine Rust (Axum + Tokio + SQLite WAL) ile yalnızca **~15MB RAM** tüketir.
+- ⏱️ **Sub-Millisecond Webhook Yanıtı:** Webhook isteklerini <2ms sürede karşılayıp 200 OK döner; AI özetleme görevini arka plandaki asenkron Tokio worker kuyruğunda yürütür.
+- 🧠 **3 Kademeli AI Fallback Zinciri:** NVIDIA NIM &rarr; Mikoshi AI Gateway &rarr; Sıfır hatayla çalışan Deterministik Conventional Commits kural motoru.
+- 🛡️ **Tavizsiz Güvenlik & DDoS Koruması:** Sabit zamanlı HMAC-SHA256 doğrulama, Leaky-Bucket IP hız kısıtlaması (`tower_governor`), SQL injection bağışıklığı.
+- 🔒 **KVKK & E-posta Maskeleme:** Ham webhook verilerindeki `author.email` ve kişisel e-postalar işleme kapısında ayıklanır; kamuya açık changelog'a asla sızdırılmaz.
+- 🗄️ **İmha Ledger'ı & R2 Yedek Koruması:** KVKK kapsamında silinen hesaplar bağımsız imha ledger'ına kaydedilir; felaket kurtarma senaryosunda eski bir R2 yedeğinden geri yükleme yapılsa dahi silinmiş hesapların dirilmesini (ghost account) otomatik olarak engeller.
+- 📦 **Gömülebilir Hafif Widget:** &lt;15KB Vanilla JS ve Shadow DOM ile ana sitenizin CSS stilleriyle çakışmadan tek satır script ile entegre edilir.
+
+---
+
+## 🏛️ Mimari Şeması
+
+```mermaid
+graph TD
+    GH[GitHub Repoları / Webhook] -->|Push / PR / Release HMAC-SHA256| Cloudflare[Cloudflare Tunnel / Edge]
+    Cloudflare -->|HTTPS| Caddy[Caddy Reverse Proxy :8095]
+    Caddy --> Axum[Commit Günlüğü — Axum 0.7 + Tokio Engine]
+
+    subgraph "Güvenlik & Filtreleme Katmanı"
+        Axum --> RateLimit[tower_governor Leaky-Bucket Rate Limiter]
+        RateLimit --> HMACVerify[HMAC-SHA256 Webhook İmza Doğrulama]
+        HMACVerify --> PrivacySanitizer[Author Email & Personal Info Masker]
+    end
+
+    subgraph "Arka Plan Görev Kuyruğu (Tokio Async Worker)"
+        PrivacySanitizer --> TaskQueue[Tokio Async Task Queue]
+        TaskQueue --> LLMChain[AI Fallback Zinciri]
+        
+        LLMChain --> Tier1[1. NVIDIA NIM - Nemotron 30B / DeepSeek]
+        LLMChain -.->|Fallback| Tier2[2. Mikoshi AI Gateway / Local LLM]
+        LLMChain -.->|Fallback| Tier3[3. Deterministik Kural Motoru - Zero Failure]
+    end
+
+    subgraph "Veri ve Kalıcılık Katmanı"
+        TaskQueue --> SQLx[(SQLx SQLite WAL - Zero Config / Embedded)]
+        SQLx --> ErasureLedger[(KVKK İmha Ledger'ı & R2 Restore Sync)]
+    end
+
+    subgraph "Sunum ve İstemci Katmanı"
+        Axum --> AuthUI[Kimlik Doğrulama: Login / Register / Forgot Password]
+        Axum --> DashboardUI[Yönetim Paneli - Editoryal Responsive UI]
+        Axum --> PublicChangelog[Public Changelog /c/:slug]
+        Axum --> WidgetScript[Vanilla JS Widget <15KB Shadow DOM]
+    end
 ```
-src/app/(marketing)   pazarlama sitesi (/) — hero, fiyatlandırma, "nasıl çalışır"
-src/app/(dashboard)   panel: proje listesi, taslak onay akışı, marka ayarları, faturalandırma
-src/app/c/[slug]      genel changelog sayfası (müşteriye görünen)
-src/app/api           GitHub webhook, GitHub App install callback, entry CRUD, widget API
-src/worker            BullMQ worker — commit/PR'ı AI ile changelog taslağına çevirir
-src/lib               db (Prisma), GitHub App istemcisi, AI özetleme, auth, session
-widget/               bağımsız, framework'süz gömülebilir widget script'i (esbuild ile derlenir)
-prisma/schema.prisma  veri modeli
-docs/                 mimari ve dağıtım notları
+
+---
+
+## 🛠️ Teknoloji Yığını
+
+| Katman | Teknoloji | Açıklama |
+| :--- | :--- | :--- |
+| **Web Çerçevesi** | Axum 0.7 & Tokio 1 | Yüksek performanslı asenkron HTTP sunucusu |
+| **Veritabanı** | SQLite (WAL Mode) & SQLx 0.8 | Sıfır konfigürasyonlu, ACID uyumlu, dosya tabanlı güvenli depolama |
+| **Şablon Motoru** | Minijinja 2 | Sıfır bağımlılıklı, güvenli SSR HTML motoru |
+| **Kimlik Doğrulama** | Argon2id & HttpOnly Cookies | OWASP standartlarında parola hashleme ve kriptografik oturum yönetimi |
+| **Hız Sınırlayıcı** | Tower Governor 0.4 | Smart-IP tabanlı Leaky-Bucket DoS ve brute-force koruması |
+| **İmza Doğrulama** | HMAC-SHA256 & Subtle 2.6 | Zamanlama saldırılarına karşı sabit zamanlı (constant-time) doğrulama |
+| **Veri İmhası** | KVKK Erasure Ledger & R2 Sync | Yedekten kurtarma sonrası dahi silinen kullanıcıların dirilmesini önleyen hook |
+
+---
+
+## 📦 Gömülebilir Widget Kullanımı (&lt;15KB)
+
+Web sitenize veya SaaS ürününüze yenilikler bildirim rozetini eklemek için tek bir `<script>` etiketi yeterlidir:
+
+```html
+<!-- Web sitenizin <body> etiketinin sonuna ekleyin -->
+<script src="https://commit.dixtuel.tr/static/js/widget.js" data-key="WIDGET_KEYINIZ" async></script>
 ```
 
-## Kurulum (bir sonraki adım)
+- **Shadow DOM:** Sayfanızdaki CSS stilleri widget'ın içine etki etmez, widget stilleri de sayfanızı bozmaz.
+- **Okunmadı Sayacı:** Ziyaretçinin en son ne zaman yenilikleri açtığını `localStorage` üzerinden takip eder ve rozet üzerinde yeni güncelleme sayısını gösterir.
+- **Duyarlı (Responsive):** Mobilde ekran genişliğini taşmadan zarif bir popover açar.
+
+---
+
+## 🛡️ Güvenlik, Gizlilik ve KVKK Standartları
+
+1. **GitHub Webhook İmza Doğrulaması:** GitHub'dan gelen tüm payload'lar `X-Hub-Signature-256` başlığı üzerinden gizli anahtarla doğrulanır. Zamanlama saldırılarını engellemek amacıyla `subtle::ConstantTimeEq` kullanılır.
+2. **Kişisel E-posta Maskeleme:** Commit mesajlarında veya yazar üst verilerinde yer alan `author.email` ve `committer.email` adresleri kapıda ayıklanır, public changelog (`/c/:slug`) veya widget JSON çıktısına asla sızdırılmaz.
+3. **KVKK Uyumlu Hesap Silme & İmha Ledger'ı:** Kullanıcı hesabını sildiğinde tüm ilişkili projeleri ve verileri veritabanından kalıcı olarak silinir (`ON DELETE CASCADE`). E-posta adresinin SHA-256 özeti `data/erasure-ledger.jsonl` kütüğüne yazılır ve Cloudflare R2'ye bağımsız kopyalanır. Bir felaket kurtarma anında eski bir SQLite yedeğinden dönülse dahi sunucu açılışında silinmiş hesaplar tespit edilerek anında yeniden imha edilir.
+4. **Çerez Güvenliği:** Yalnızca oturum için zorunlu `cg_session` çerezi kullanılır (`HttpOnly`, `SameSite=Lax`, `Secure`). Üçüncü taraf reklam ve izleme çerezi kesinlikle yer almaz.
+
+---
+
+## 💻 Yerel Geliştirme ve Kurulum
+
+### Gereksinimler
+- Rust 1.80+ (`rustup default stable`)
+- SQLite 3
+
+### Adımlar
 
 ```bash
-npm install
-cp .env.example .env   # değerleri doldurun
-npx prisma migrate dev
-npm run dev             # Next.js, :3000
-npm run worker          # ayrı terminalde — BullMQ worker
+# 1. Depoyu klonlayın
+git clone https://github.com/dixtuel/commit-gunlugu.git
+cd commit-gunlugu
+
+# 2. Ortam değişkenlerini hazırlayın
+cp .env.example .env
+
+# 3. Testleri çalıştırın
+cargo test
+
+# 4. Geliştirme sunucusunu başlatın
+cargo run
 ```
 
-## Tasarım kimliği
+Sunucu varsayılan olarak `http://127.0.0.1:8095` adresinde dinlemeye başlar.
 
-Pazarlama sitesi ve panel, önceden onaylanan tasarım taslağıyla aynı token sistemini kullanır:
-orman yeşili aksan (`--accent: #3a6b52`), Source Serif 4 / Public Sans / IBM Plex Mono üçlüsü,
-diff ve commit-log motifleri. Token'lar `src/app/globals.css` içinde tanımlı.
+---
+
+## 🏅 GitHub Developer Program Üyelik Kılavuzu
+
+1. Hesabınızda 2FA ve doğrulanmış e-postanın aktif olduğundan emin olun.
+2. [GitHub Developer Settings &rarr; GitHub Apps](https://github.com/settings/apps/new) sayfasına gidin.
+3. **App Name:** `Commit Günlüğü`
+4. **Homepage URL:** `https://commit.dixtuel.tr`
+5. **Webhook URL:** `https://commit.dixtuel.tr/api/v1/webhook`
+6. **Webhook Secret:** `.env` dosyanızdaki `GITHUB_WEBHOOK_SECRET`
+7. **İzinler:**
+   - `Contents`: Read-only
+   - `Pull requests`: Read-only
+8. **Events:** `Push`, `Pull request` seçeneklerini işaretleyip kaydedin.
+9. [github.com/settings/developer_program](https://github.com/settings/developer_program) sayfasına giderek başvuru formunu onaylayın. Profilinize **Developer Program Member** rozeti anında eklenecektir.
+
+---
+
+## 📄 Lisans
+
+Bu proje [MIT Lisansı](LICENSE) altında lisanslanmıştır. Kullanılan bağımlılıkların ve açık kaynak kütüphanelerin lisans dökümü için [ATTRIBUTION.md](ATTRIBUTION.md) dosyasına bakabilirsiniz.

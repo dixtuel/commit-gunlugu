@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container hero-section">
+  <div class="hero-badge">Rust + Axum &bull; ~15MB RAM &bull; Sub-millisecond Webhooks</div>
+  <h1 class="hero-title">Commit'lerinizi Müşterilerinizin Seveceği Sürüm Notlarına Dönüştürün</h1>
+  <p class="hero-subtitle">
+    GitHub webhook'ları geldiği anda commit ve PR'larınızı analiz eder, çok katmanlı AI fallback zinciriyle
+    anlaşılır sürüm günlükleri oluşturur. Sıfır konfigürasyon, tam gizlilik ve gömülebilir hafif widget.
+  </p>
+  <div class="hero-actions">
+    <a href="/dashboard" class="btn btn-primary">Kontrol Paneline Git &rarr;</a>
+    <a href="https://github.com/settings/apps/new" target="_blank" rel="noopener" class="btn btn-secondary">GitHub App Oluştur</a>
+  </div>
+</div>
+
+<div class="container features-grid">
+  <div class="feature-card">
+    <div class="feature-icon">🛡️</div>
+    <h3>Kusursuz Güvenlik & Gizlilik</h3>
+    <p>Sabit zamanlı HMAC-SHA256 imza doğrulama, Leaky-Bucket DDoS koruması ve e-posta maskeleme ile kişisel verileriniz asla dışarı sızmaz.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🧠</div>
+    <h3>3 Kademeli AI Fallback</h3>
+    <p>NVIDIA NIM (Nemotron/DeepSeek) &rarr; Mikoshi AI Gateway &rarr; Kural Tabanlı Deterministik Motor. Kesinti anında dahi sıfır hata.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🚀</div>
+    <h3>Gömülebilir Hafif Widget</h3>
+    <p>&lt;15KB Vanilla JS ve Shadow DOM mimarisiyle herhangi bir web sitesine tek satır script ile entegre edilebilir.</p>
+  </div>
+</div>
+
+<div class="container section">
+  <h2 class="section-title">Kayıtlı Projeler & Sürüm Günlükleri</h2>
+  {% if projects %}
+  <div class="projects-grid">
+    {% for p in projects %}
+    <div class="project-card" style="border-left: 4px solid {{ p.brand_color }}">
+      <div class="project-header">
+        <h4>{{ p.name }}</h4>
+        <span class="repo-tag">{{ p.github_repo_full_name }}</span>
+      </div>
+      <p class="project-slug">URL: <code>/c/{{ p.slug }}</code></p>
+      <div class="project-links">
+        <a href="/c/{{ p.slug }}" class="btn-sm btn-outline">Changelog'u Gör &rarr;</a>
+        <button class="btn-sm btn-ghost copy-btn" data-key="{{ p.widget_key }}">Widget Kodunu Kopyala</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>Henüz kayıtlı proje bulunmuyor. GitHub'dan bir webhook gönderildiğinde veya kontrol panelinden proje eklendiğinde burada görünecektir.</p>
+    <a href="/dashboard" class="btn btn-sm btn-primary">İlk Projeyi Ekle</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

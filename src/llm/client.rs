@@ -1,0 +1,262 @@
+use serde::Deserialize;
+use serde_json::json;
+use std::time::Duration;
+
+use crate::config::Config;
+use crate::llm::deterministic::{generate_deterministic_entry, EntryDraft};
+use crate::sanitizer::sanitize_text;
+
+const SYSTEM_PROMPT: &str = r#"Sen bir SaaS ve yazılım ürününün son kullanıcılarına yönelik editoryal sürüm günlüğü (changelog) editörüsün.
+Sana git commit mesajları ve/veya bir Pull Request başlığı ve açıklaması verilecek.
+Görevin:
+1. Teknik jargondan ve commit ön eklerinden (feat:, fix:, chore:, merge, refactor vb.) arındırılmış, son kullanıcının değerini anlayacağı TEK bir sürüm notu üretmek.
+2. Kişisel e-posta, iç dosya yolları veya hassas verileri asla metne dahil etmemek.
+3. Kategori olarak yalnızca şu üçünden birini seçmek: "NEW" (yeni özellik), "FIX" (hata giderme), "IMPROVEMENT" (iyileştirme/performans).
+4. Yalnızca aşağıdaki geçerli JSON şemasında yanıt dönmek:
+{
+  "category": "NEW" | "FIX" | "IMPROVEMENT",
+  "title": "Kısa ve net başlık (en fazla 80 karakter)",
+  "body": "Son kullanıcıya faydasını anlatan 1-2 cümlelik açıklama (en fazla 280 karakter)"
+}"#;
+
+#[derive(Clone)]
+pub struct LlmFallbackEngine {
+    http: reqwest::Client,
+    config: Config,
+}
+
+#[derive(Deserialize)]
+struct ChatCompletionResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Deserialize)]
+struct Choice {
+    message: Message,
+}
+
+#[derive(Deserialize)]
+struct Message {
+    content: Option<String>,
+}
+
+impl LlmFallbackEngine {
+    pub fn new(config: Config) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        Self { http, config }
+    }
+
+    /// Çok aşamalı AI zinciri:
+    /// 1. NVIDIA NIM modelleri (sırayla denenir)
+    /// 2. Mikoshi AI Gateway / OpenAI uyumlu uç nokta
+    /// 3. Deterministik kural motoru (Zero-failure)
+    pub async fn summarize(
+        &self,
+        pr_title: Option<&str>,
+        pr_body: Option<&str>,
+        commit_messages: &[String],
+    ) -> EntryDraft {
+        // Girdi temizliği: e-postaları ve hassas kalıntıları filtrele
+        let clean_commits: Vec<String> = commit_messages
+            .iter()
+            .map(|m| sanitize_text(m))
+            .collect();
+        let clean_pr_title = pr_title.map(sanitize_text);
+        let clean_pr_body = pr_body.map(sanitize_text);
+
+        let user_prompt = build_user_prompt(
+            clean_pr_title.as_deref(),
+            clean_pr_body.as_deref(),
+            &clean_commits,
+        );
+
+        // 1. Aşama: NVIDIA NIM
+        if let Some(ref api_key) = self.config.nvidia_nim_api_key {
+            for model in &self.config.nvidia_nim_models {
+                match self.call_nvidia_nim(api_key, model, &user_prompt).await {
+                    Ok(draft) => {
+                        tracing::info!("AI özeti başarıyla üretildi (NVIDIA NIM: {})", model);
+                        return draft;
+                    }
+                    Err(e) => {
+                        tracing::warn!("NVIDIA NIM modeli ({}) başarısız: {}, sonrakine geçiliyor", model, e);
+                    }
+                }
+            }
+        }
+
+        // 2. Aşama: Mikoshi AI Gateway / LiteLLM
+        if let (Some(ref base_url), Some(ref api_key)) =
+            (&self.config.ai_api_base_url, &self.config.ai_api_key)
+        {
+            let model = self.config.ai_model.as_deref().unwrap_or("claude-sonnet-5");
+            match self.call_gateway(base_url, api_key, model, &user_prompt).await {
+                Ok(draft) => {
+                    tracing::info!("AI özeti başarıyla üretildi (AI Gateway: {})", model);
+                    return draft;
+                }
+                Err(e) => {
+                    tracing::warn!("AI Gateway ({}) başarısız: {}, deterministik motora geçiliyor", model, e);
+                }
+            }
+        }
+
+        // 3. Aşama: Deterministik Kural Motoru (Sıfır hata garantisi)
+        tracing::info!("AI servisleri devrede değil veya yanıt vermedi, deterministik motor çalıştırılıyor");
+        generate_deterministic_entry(
+            clean_pr_title.as_deref(),
+            clean_pr_body.as_deref(),
+            &clean_commits,
+        )
+    }
+
+    async fn call_nvidia_nim(
+        &self,
+        api_key: &str,
+        model: &str,
+        user_prompt: &str,
+    ) -> Result<EntryDraft, String> {
+        let url = "https://integrate.api.nvidia.com/v1/chat/completions";
+        let body = json!({
+            "model": model,
+            "messages": [
+                { "role": "system", "content": SYSTEM_PROMPT },
+                { "role": "user", "content": user_prompt }
+            ],
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 512,
+            "response_format": { "type": "json_object" }
+        });
+
+        let resp = self
+            .http
+            .post(url)
+            .bearer_auth(api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("İstek hatası: {}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("HTTP {}: {}", status, text));
+        }
+
+        let parsed: ChatCompletionResponse = resp
+            .json()
+            .await
+            .map_err(|e| format!("JSON ayrıştırma hatası: {}", e))?;
+
+        let raw_content = parsed
+            .choices
+            .first()
+            .and_then(|c| c.message.content.as_deref())
+            .ok_or_else(|| "Boş model yanıtı".to_string())?;
+
+        parse_draft_json(raw_content)
+    }
+
+    async fn call_gateway(
+        &self,
+        base_url: &str,
+        api_key: &str,
+        model: &str,
+        user_prompt: &str,
+    ) -> Result<EntryDraft, String> {
+        let endpoint = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+        let body = json!({
+            "model": model,
+            "messages": [
+                { "role": "system", "content": SYSTEM_PROMPT },
+                { "role": "user", "content": user_prompt }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 512,
+            "response_format": { "type": "json_object" }
+        });
+
+        let resp = self
+            .http
+            .post(&endpoint)
+            .bearer_auth(api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Gateway istek hatası: {}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Gateway HTTP {}: {}", status, text));
+        }
+
+        let parsed: ChatCompletionResponse = resp
+            .json()
+            .await
+            .map_err(|e| format!("Gateway JSON ayrıştırma: {}", e))?;
+
+        let raw_content = parsed
+            .choices
+            .first()
+            .and_then(|c| c.message.content.as_deref())
+            .ok_or_else(|| "Boş gateway yanıtı".to_string())?;
+
+        parse_draft_json(raw_content)
+    }
+}
+
+fn build_user_prompt(
+    pr_title: Option<&str>,
+    pr_body: Option<&str>,
+    commits: &[String],
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(t) = pr_title {
+        parts.push(format!("PR Başlığı: {}", t));
+    }
+    if let Some(b) = pr_body {
+        let short_b = b.lines().take(5).collect::<Vec<_>>().join("\n");
+        parts.push(format!("PR Açıklaması:\n{}", short_b));
+    }
+
+    let commit_list = commits
+        .iter()
+        .take(15)
+        .map(|c| format!("- {}", c))
+        .collect::<Vec<_>>()
+        .join("\n");
+    parts.push(format!("Commit Mesajları:\n{}", commit_list));
+
+    parts.join("\n\n")
+}
+
+fn parse_draft_json(raw: &str) -> Result<EntryDraft, String> {
+    // Markdown code-block temizliği
+    let clean = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+
+    let draft: EntryDraft = serde_json::from_str(clean)
+        .map_err(|e| format!("EntryDraft JSON parse hatası: {}. Ham metin: {}", e, clean))?;
+
+    let valid_category = match draft.category.to_uppercase().as_str() {
+        "NEW" => "NEW".to_string(),
+        "FIX" => "FIX".to_string(),
+        _ => "IMPROVEMENT".to_string(),
+    };
+
+    Ok(EntryDraft {
+        category: valid_category,
+        title: draft.title.chars().take(120).collect(),
+        body: draft.body.chars().take(400).collect(),
+    })
+}
