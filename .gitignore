@@ -24,9 +24,11 @@ static/google*.html
 static/BingSiteAuth.xml
 static/yandex_*.html
 
-# SEO dosyaları — sunucuda/deploy çıktısında tutulur, repoya girmez
+# SEO ve Demo önizleme dosyaları — yerel test amaçlıdır, secret içerebilir, repoya girmez
 static/sitemap.xml
 static/robots.txt
+static/demo*.html
+static/*preview*.html
 
 # AI asistan kılavuzları — yalnız yerel geliştirme notu, public repoya girmez
 CLAUDE.md
