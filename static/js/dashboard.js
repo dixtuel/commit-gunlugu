@@ -63,6 +63,8 @@ async function submitNewProject(e) {
   const repo = document.getElementById("repo_name").value.trim();
   const name = document.getElementById("proj_name").value.trim();
   const color = document.getElementById("brand_color").value;
+  const parseMode = document.getElementById("parse_mode") ? document.getElementById("parse_mode").value : "ai_editorial";
+  const audience = document.getElementById("audience") ? document.getElementById("audience").value : "end_user";
 
   try {
     const res = await fetch("/api/v1/projects", {
@@ -71,7 +73,9 @@ async function submitNewProject(e) {
       body: JSON.stringify({
         github_repo_full_name: repo,
         name: name,
-        brand_color: color
+        brand_color: color,
+        parse_mode: parseMode,
+        audience: audience
       })
     });
 

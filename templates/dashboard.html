@@ -77,9 +77,15 @@
                 <strong>{{ p.name }}</strong>
               </div>
               <small class="text-muted">{{ p.github_repo_full_name }}</small>
+              <div style="margin: 4px 0;">
+                <span class="mode-badge" title="Çalışma Modu">{{ p.parse_mode }}</span>
+                <span class="mode-badge" title="Hedef Kitle">{{ p.audience }}</span>
+              </div>
               <div class="side-project-actions">
-                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Changelog &rarr;</a>
-                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget Kodu</button>
+                <a href="/c/{{ p.slug }}" target="_blank" class="text-link">Görüntüle</a>
+                <a href="/c/{{ p.slug }}/export.md" class="text-link" download>Markdown (.md)</a>
+                <a href="/c/{{ p.slug }}/feed.xml" target="_blank" class="text-link">RSS Feed</a>
+                <button class="btn-copy-widget" onclick="copyWidgetSnippet('{{ p.widget_key }}')">Widget</button>
               </div>
             </li>
             {% endfor %}
@@ -131,6 +137,22 @@
       <div class="form-group">
         <label>Görünen Proje Adı</label>
         <input type="text" id="proj_name" name="proj_name" placeholder="ör. Commit Günlüğü" required class="input-text">
+      </div>
+      <div class="form-group">
+        <label>Çalışma Modu (Ayrıştırma & Çeviri)</label>
+        <select id="parse_mode" name="parse_mode" class="input-text" style="background: var(--input-bg, #0d1117); color: #fff; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; width: 100%;">
+          <option value="ai_editorial" selected>🧠 AI Editoryal (LLM + Fallback zinciri — Müşteri Odaklı)</option>
+          <option value="conventional">⚡ Conventional Commits (git-cliff / Angular katı regex)</option>
+          <option value="pr_centric">🏷️ PR-Centric (release-drafter etiketleri & PR başlıkları)</option>
+          <option value="raw_git">📜 Ham Git Log (auto-changelog tarzı direkt commit listesi)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Hedef Kitle (Görünüm Düzeyi)</label>
+        <select id="audience" name="audience" class="input-text" style="background: var(--input-bg, #0d1117); color: #fff; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; width: 100%;">
+          <option value="end_user" selected>👤 Son Kullanıcı (Sade, anlaşılır, hash'siz)</option>
+          <option value="developer">💻 Geliştirici (Commit SHA linkli, PR numaralı ve teknik)</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Marka Rengi (Hex)</label>

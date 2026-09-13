@@ -152,6 +152,11 @@ pub async fn register_submit(
         return render_error("Lütfen geçerli bir e-posta adresi girin.");
     }
 
+    // Posta sunucusu (MX) ve geçerli domain kontrolü
+    if let Err(err_msg) = crate::auth::email_validator::validate_email_mx(&email).await {
+        return render_error(err_msg);
+    }
+
     if form.password.len() < 8 {
         return render_error("Şifreniz en az 8 karakter uzunluğunda olmalıdır.");
     }

@@ -111,6 +111,9 @@ pub struct CreateProjectRequest {
     pub name: String,
     pub slug: Option<String>,
     pub brand_color: Option<String>,
+    pub parse_mode: Option<String>,
+    pub audience: Option<String>,
+    pub template_style: Option<String>,
 }
 
 pub async fn create_project_handler(
@@ -139,6 +142,9 @@ pub async fn create_project_handler(
         brand_color: payload.brand_color.unwrap_or_else(|| "#10b981".to_string()),
         brand_logo_url: None,
         webhook_secret: state.config.default_webhook_secret.clone(),
+        parse_mode: payload.parse_mode.unwrap_or_else(|| "ai_editorial".to_string()),
+        audience: payload.audience.unwrap_or_else(|| "end_user".to_string()),
+        template_style: payload.template_style.unwrap_or_else(|| "standard".to_string()),
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
@@ -146,6 +152,38 @@ pub async fn create_project_handler(
     upsert_project(&state.db, &project).await?;
 
     Ok((StatusCode::CREATED, Json(project)))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateProjectSettingsRequest {
+    pub parse_mode: String,
+    pub audience: String,
+    pub template_style: String,
+}
+
+pub async fn update_project_settings_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+    Json(payload): Json<UpdateProjectSettingsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    crate::db::update_project_modes(
+        &state.db,
+        &project_id,
+        &user.id,
+        &payload.parse_mode,
+        &payload.audience,
+        &payload.template_style,
+    )
+    .await?;
+
+    Ok(Json(json!({ "success": true, "message": "Proje ayarları güncellendi" })))
 }
 
 pub async fn list_projects_handler(

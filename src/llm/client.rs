@@ -114,6 +114,33 @@ impl LlmFallbackEngine {
         )
     }
 
+    /// Projenin seçtiği çalışma moduna (parse_mode) göre en uygun ayrıştırıcıyı ve motoru çalıştırır
+    pub async fn summarize_for_project(
+        &self,
+        parse_mode: &str,
+        pr_title: Option<&str>,
+        pr_body: Option<&str>,
+        commit_messages: &[String],
+        commit_shas: &[String],
+        labels: &[String],
+    ) -> Option<EntryDraft> {
+        match parse_mode {
+            "conventional" => {
+                Some(crate::llm::deterministic::generate_conventional_entry(commit_messages))
+            }
+            "pr_centric" => {
+                let title = pr_title.unwrap_or("Sürüm Geliştirmesi");
+                crate::llm::deterministic::generate_pr_centric_entry(title, pr_body, labels)
+            }
+            "raw_git" => {
+                Some(crate::llm::deterministic::generate_raw_git_entry(commit_messages, commit_shas))
+            }
+            _ => { // "ai_editorial"
+                Some(self.summarize(pr_title, pr_body, commit_messages).await)
+            }
+        }
+    }
+
     async fn call_nvidia_nim(
         &self,
         api_key: &str,

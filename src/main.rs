@@ -83,6 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/entries/:id/publish", post(routes::api::publish_entry_handler))
         .route("/api/v1/entries/:id/dismiss", post(routes::api::dismiss_entry_handler))
         .route("/api/v1/projects", get(routes::api::list_projects_handler).post(routes::api::create_project_handler))
+        .route("/api/v1/projects/:id/settings", post(routes::api::update_project_settings_handler))
         .route("/api/user/delete-account", post(routes::auth::delete_account_handler));
 
     // Kimlik Doğrulama (Auth) rotaları
@@ -101,11 +102,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/sitemap.xml", get(routes::seo::sitemap_xml))
         .route("/google:token.html", get(routes::seo::google_verification));
 
-    // Herkese Açık ve Kontrol Paneli rotaları
+    // Herkese Açık ve Dışa Aktarma rotaları
     let public_routes = Router::new()
         .route("/", get(routes::dashboard::landing_page))
         .route("/dashboard", get(routes::dashboard::dashboard_page))
-        .route("/c/:slug", get(routes::public::public_changelog_page));
+        .route("/c/:slug", get(routes::public::public_changelog_page))
+        .route("/c/:slug/export.md", get(routes::export::export_markdown_handler))
+        .route("/c/:slug/feed.xml", get(routes::export::export_rss_handler))
+        .route("/c/:slug/feed.json", get(routes::export::export_json_handler));
 
     let app = Router::new()
         .merge(public_routes)

@@ -155,6 +155,20 @@ pub async fn mark_password_reset_used(pool: &DbPool, id: &str) -> Result<(), App
 // PROJE & İZOLASYON SORGULARI
 // ---------------------------------------------------------------------------
 
+pub async fn find_project_by_id(
+    pool: &DbPool,
+    id: &str,
+) -> Result<Option<Project>, AppError> {
+    let project = sqlx::query_as::<_, Project>(
+        "SELECT * FROM projects WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(project)
+}
+
 pub async fn find_project_by_repo(
     pool: &DbPool,
     repo_full_name: &str,
@@ -229,8 +243,8 @@ pub async fn upsert_project(
 ) -> Result<(), AppError> {
     sqlx::query(
         r#"
-        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(github_repo_full_name) DO UPDATE SET
             user_id = COALESCE(excluded.user_id, projects.user_id),
             name = excluded.name,
@@ -238,6 +252,9 @@ pub async fn upsert_project(
             brand_color = excluded.brand_color,
             brand_logo_url = excluded.brand_logo_url,
             webhook_secret = excluded.webhook_secret,
+            parse_mode = excluded.parse_mode,
+            audience = excluded.audience,
+            template_style = excluded.template_style,
             updated_at = datetime('now')
         "#
     )
@@ -251,6 +268,35 @@ pub async fn upsert_project(
     .bind(&project.brand_color)
     .bind(&project.brand_logo_url)
     .bind(&project.webhook_secret)
+    .bind(&project.parse_mode)
+    .bind(&project.audience)
+    .bind(&project.template_style)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn update_project_modes(
+    pool: &DbPool,
+    project_id: &str,
+    user_id: &str,
+    parse_mode: &str,
+    audience: &str,
+    template_style: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        r#"
+        UPDATE projects
+        SET parse_mode = ?, audience = ?, template_style = ?, updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?
+        "#
+    )
+    .bind(parse_mode)
+    .bind(audience)
+    .bind(template_style)
+    .bind(project_id)
+    .bind(user_id)
     .execute(pool)
     .await?;
 

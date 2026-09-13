@@ -43,6 +43,9 @@ pub struct Project {
     pub brand_color: String,
     pub brand_logo_url: Option<String>,
     pub webhook_secret: String,
+    pub parse_mode: String,       // ai_editorial | conventional | pr_centric | raw_git
+    pub audience: String,         // end_user | developer
+    pub template_style: String,   // standard | grouped | compact
     pub created_at: String,
     pub updated_at: String,
 }

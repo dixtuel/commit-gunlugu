@@ -20,13 +20,20 @@
 <body class="changelog-body">
   <header class="changelog-header">
     <div class="container">
-      <div class="changelog-brand-wrap">
-        {% if project.brand_logo_url %}
-        <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
-        {% endif %}
-        <div>
-          <h1 class="changelog-title">{{ project.brand_name or project.name }}</h1>
-          <p class="changelog-sub">En son güncellemeler, yeni özellikler ve hata düzeltmeleri</p>
+      <div class="changelog-brand-wrap" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          {% if project.brand_logo_url %}
+          <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
+          {% endif %}
+          <div>
+            <h1 class="changelog-title">{{ project.brand_name or project.name }}</h1>
+            <p class="changelog-sub">En son güncellemeler, yeni özellikler ve hata düzeltmeleri</p>
+          </div>
+        </div>
+        <div class="changelog-export-actions" style="display: flex; gap: 0.5rem;">
+          <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="Markdown olarak indir">📄 Markdown (.md)</a>
+          <a href="/c/{{ project.slug }}/feed.xml" target="_blank" class="btn-sm btn-outline" title="RSS okuyucuya ekle">📡 RSS Feed</a>
+          <a href="/c/{{ project.slug }}/feed.json" target="_blank" class="btn-sm btn-outline" title="JSON Feed API">🔌 JSON Feed</a>
         </div>
       </div>
     </div>
@@ -43,7 +50,12 @@
             <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
             <time class="timeline-date">{{ (e.published_at or e.created_at)[:10] }}</time>
             {% if e.author_username %}
-            <span class="timeline-author">{{ e.author_username }}</span>
+            <span class="timeline-author">@{{ e.author_username }}</span>
+            {% endif %}
+            {% if project.audience == "developer" %}
+              {% if e.source_pr_number %}
+              <span class="badge" style="background:#1f6feb; color:#fff; font-size:0.75rem;">PR #{{ e.source_pr_number }}</span>
+              {% endif %}
             {% endif %}
           </div>
           <h2 class="timeline-heading">{{ e.title }}</h2>

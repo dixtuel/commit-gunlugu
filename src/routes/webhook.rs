@@ -107,6 +107,9 @@ pub async fn handle_github_webhook(
                 brand_color: "#10b981".to_string(),
                 brand_logo_url: None,
                 webhook_secret: state.config.default_webhook_secret.clone(),
+                parse_mode: "ai_editorial".to_string(),
+                audience: "end_user".to_string(),
+                template_style: "standard".to_string(),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
@@ -181,8 +184,39 @@ async fn process_event_background(
                 }
             }
 
-            // AI Fallback Motorunu çalıştır
-            let draft = state.llm.summarize(None, None, &commit_messages).await;
+            // Projenin parse_mode ayarını çek
+            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
+                crate::db::models::Project {
+                    id: project_id.clone(),
+                    user_id: None,
+                    github_repo_full_name: "bilinmeyen/repo".to_string(),
+                    name: "Proje".to_string(),
+                    slug: "proje".to_string(),
+                    widget_key: "w_def".to_string(),
+                    brand_name: None,
+                    brand_color: "#10b981".to_string(),
+                    brand_logo_url: None,
+                    webhook_secret: "".to_string(),
+                    parse_mode: "ai_editorial".to_string(),
+                    audience: "end_user".to_string(),
+                    template_style: "standard".to_string(),
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                }
+            });
+
+            // Proje moduna göre ayrıştırma motorunu çalıştır
+            let draft = match state.llm.summarize_for_project(
+                &project.parse_mode,
+                None,
+                None,
+                &commit_messages,
+                &commit_shas,
+                &[],
+            ).await {
+                Some(d) => d,
+                None => return Ok(()),
+            };
 
             let entry = Entry {
                 id: Uuid::new_v4().to_string(),
@@ -191,7 +225,7 @@ async fn process_event_background(
                 title: draft.title,
                 body: draft.body,
                 status: "DRAFT".to_string(),
-                ai_generated: 1,
+                ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
                 source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
                 source_pr_number: None,
                 author_username: primary_author,
@@ -201,7 +235,7 @@ async fn process_event_background(
             };
 
             insert_entry(&state.db, &entry).await?;
-            tracing::info!("Yeni push changelog taslağı eklendi: {}", entry.title);
+            tracing::info!("Yeni push changelog taslağı eklendi (mod: {}): {}", project.parse_mode, entry.title);
         }
         "pull_request" => {
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
@@ -224,7 +258,51 @@ async fn process_event_background(
                 .and_then(|u| u.get("login"))
                 .and_then(|l| l.as_str());
 
-            let draft = state.llm.summarize(pr_title, pr_body, &[]).await;
+            let labels: Vec<String> = pr
+                .and_then(|p| p.get("labels"))
+                .and_then(|l| l.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.get("name").and_then(|n| n.as_str()))
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
+                crate::db::models::Project {
+                    id: project_id.clone(),
+                    user_id: None,
+                    github_repo_full_name: "bilinmeyen/repo".to_string(),
+                    name: "Proje".to_string(),
+                    slug: "proje".to_string(),
+                    widget_key: "w_def".to_string(),
+                    brand_name: None,
+                    brand_color: "#10b981".to_string(),
+                    brand_logo_url: None,
+                    webhook_secret: "".to_string(),
+                    parse_mode: "ai_editorial".to_string(),
+                    audience: "end_user".to_string(),
+                    template_style: "standard".to_string(),
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                }
+            });
+
+            let draft = match state.llm.summarize_for_project(
+                &project.parse_mode,
+                pr_title,
+                pr_body,
+                &[],
+                &[],
+                &labels,
+            ).await {
+                Some(d) => d,
+                None => {
+                    tracing::info!("PR etiketleri nedeniyle changelog atlandı (skip-changelog)");
+                    return Ok(());
+                }
+            };
 
             let entry = Entry {
                 id: Uuid::new_v4().to_string(),

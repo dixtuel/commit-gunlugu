@@ -1,20 +1,28 @@
-name: CI
+name: Rust CI
 
 on:
   push:
     branches: [main]
   pull_request:
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
+  check-and-test:
+    name: Check and Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm install
-      - run: npx prisma generate
-      - run: npm run typecheck
-      - run: npm run lint
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Check
+        run: cargo check --all
+
+      - name: Cargo Test
+        run: cargo test --all --verbose

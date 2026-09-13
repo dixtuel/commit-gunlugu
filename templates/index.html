@@ -1,87 +1,247 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container hero-section">
-  <div class="hero-badge">Rust + Axum &bull; ~15MB RAM &bull; Sub-millisecond Webhooks</div>
-  <h1 class="hero-title">Commit'lerinizi Müşterilerinizin Seveceği Sürüm Notlarına Dönüştürün</h1>
-  <p class="hero-subtitle">
-    GitHub webhook'ları geldiği anda commit ve PR'larınızı analiz eder, çok katmanlı AI fallback zinciriyle
-    anlaşılır sürüm günlükleri oluşturur. Sıfır konfigürasyon, tam gizlilik ve gömülebilir hafif widget.
-  </p>
-  <div class="hero-actions">
-    <a href="/dashboard" class="btn btn-primary">Kontrol Paneline Git &rarr;</a>
-    <a href="https://github.com/settings/apps/new" target="_blank" rel="noopener" class="btn btn-secondary">GitHub App Oluştur</a>
-  </div>
-</div>
+<!-- Hero Section -->
+<section class="hero-section">
+  <div class="container hero-content">
+    <div class="hero-badge">
+      <span class="badge-dot"></span> Sürüm Günlüğü Otomasyonu
+    </div>
+    <h1 class="hero-title">Commit'lerinizi Müşterilerinizin Seveceği Sürüm Notlarına Dönüştürün</h1>
+    <p class="hero-subtitle">
+      GitHub deponuza kod gönderildiği anda teknik commit ve PR hareketlerinizi analiz eder, 
+      anlaşılır ve şık sürüm günlükleri oluşturur. Sıfır konfigürasyon, hafif widget ve tam gizlilik.
+    </p>
+    <div class="hero-cta">
+      <a href="/register" class="btn btn-primary btn-lg">Ücretsiz Başlayın &rarr;</a>
+      <a href="#how-it-works" class="btn btn-secondary btn-lg">Nasıl Çalışır?</a>
+    </div>
 
-<div class="container features-grid">
-  <div class="feature-card">
-    <div class="feature-icon">🛡️</div>
-    <h3>Kusursuz Güvenlik & Gizlilik</h3>
-    <p>Sabit zamanlı HMAC-SHA256 imza doğrulama, Leaky-Bucket DDoS koruması ve e-posta maskeleme ile kişisel verileriniz asla dışarı sızmaz.</p>
+    <!-- Product Preview Showcase -->
+    <div class="preview-showcase">
+      <div class="preview-window">
+        <div class="window-header">
+          <div class="window-dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <div class="window-title">Canlı Dönüşüm Önizlemesi</div>
+        </div>
+        <div class="window-body">
+          <div class="preview-split">
+            <div class="preview-col commit-box">
+              <div class="col-label">GitHub'dan Gelen Commit</div>
+              <div class="code-snippet">
+                <code><span class="git-tag">feat(checkout):</span> add Shopier gateway and multi-currency checkout (#84)</code>
+              </div>
+              <div class="commit-meta">
+                <span>commit <code>4e870ca</code></span>
+                <span>&bull;</span>
+                <span>main dalına birleştirildi</span>
+              </div>
+            </div>
+            <div class="preview-arrow">&rarr;</div>
+            <div class="preview-col changelog-box">
+              <div class="col-label">Oluşan Sürüm Notu</div>
+              <div class="result-card">
+                <div class="result-header">
+                  <span class="category-pill pill-new">YENİ</span>
+                  <span class="result-date">Bugün</span>
+                </div>
+                <h4>Çoklu Para Birimi ve Güvenli Ödeme Desteği</h4>
+                <p>Müşterileriniz artık farklı para birimleriyle hızlı ve güvenli ödeme yapabilir. Alışveriş akışı optimize edildi.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="feature-card">
-    <div class="feature-icon">🧠</div>
-    <h3>3 Kademeli AI Fallback</h3>
-    <p>NVIDIA NIM (Nemotron/DeepSeek) &rarr; Mikoshi AI Gateway &rarr; Kural Tabanlı Deterministik Motor. Kesinti anında dahi sıfır hata.</p>
-  </div>
-  <div class="feature-card">
-    <div class="feature-icon">🚀</div>
-    <h3>Gömülebilir Hafif Widget</h3>
-    <p>&lt;15KB Vanilla JS ve Shadow DOM mimarisiyle herhangi bir web sitesine tek satır script ile entegre edilebilir.</p>
-  </div>
-</div>
+</section>
 
-<div class="container section">
-  <h2 class="section-title text-center">Nasıl Kullanılır? 3 Kolay Adım</h2>
-  <div class="steps-grid">
-    <div class="step-card">
-      <div class="step-number">1</div>
-      <div class="step-content">
-        <h4>Projenizi Oluşturun</h4>
-        <p>Kontrol panelinize giriş yapın ve projenizin adını girin. Size özel güvenli Webhook adresi ve gizli anahtarınız anında üretilir.</p>
-      </div>
+<!-- Features Grid -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">Neden Commit Günlüğü?</h2>
+      <p class="section-subtitle">Geliştiricilerin kod yazmaya, ürün ekiplerinin ise kullanıcılara odaklanmasını sağlayan modern çözümler.</p>
     </div>
-    <div class="step-card">
-      <div class="step-number">2</div>
-      <div class="step-content">
-        <h4>GitHub Deponuzu Bağlayın</h4>
-        <p>GitHub deponuzun <strong>Settings &rarr; Webhooks</strong> sayfasına gidin. Üretilen Webhook URL ve Secret'ı yapıştırıp <em>push</em> olayını seçin.</p>
-      </div>
-    </div>
-    <div class="step-card">
-      <div class="step-number">3</div>
-      <div class="step-content">
-        <h4>Sitenize Gömün veya Paylaşın</h4>
-        <p>Tek satırlık hafif widget kodunu web sitenize ekleyin veya size özel <code>commit.dixtuel.tr/c/projeniz</code> sayfasını kullanıcılarınızla doğrudan paylaşın!</p>
-      </div>
-    </div>
-  </div>
-</div>
 
-<div class="container section">
-  <h2 class="section-title">Kayıtlı Projeler & Sürüm Günlükleri</h2>
-  {% if projects %}
-  <div class="projects-grid">
-    {% for p in projects %}
-    <div class="project-card" style="border-left: 4px solid {{ p.brand_color }}">
-      <div class="project-header">
-        <h4>{{ p.name }}</h4>
-        <span class="repo-tag">{{ p.github_repo_full_name }}</span>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <h3>Akıllı ve Anlaşılır Özetler</h3>
+        <p>Teknik jargonu temizler; son kullanıcıların anlayacağı, değer odaklı ve aktif fiilli Türkçe veya İngilizce sürüm notları üretir.</p>
       </div>
-      <p class="project-slug">URL: <code>/c/{{ p.slug }}</code></p>
-      <div class="project-links">
-        <a href="/c/{{ p.slug }}" class="btn-sm btn-outline">Changelog'u Gör &rarr;</a>
-        <button class="btn-sm btn-ghost copy-btn" data-key="{{ p.widget_key }}">Widget Kodunu Kopyala</button>
+
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Anında Webhook Yanıtı</h3>
+        <p>GitHub webhook isteklerini milisaniyeler içinde işler, kuyruğa alır ve arka planda güvenle sürüm taslağınızı hazırlar.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Gömülebilir Hafif Widget</h3>
+        <p>Herhangi bir web sitesine veya SaaS paneline tek satır script ile eklenir. Shadow DOM sayesinde sitenizin tasarımını asla bozmaz.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Tam Gizlilik ve KVKK</h3>
+        <p>Geliştirici e-postaları maskelenir, kişisel veriler dışarı sızdırılmaz. Unutulma hakkı kapsamında kalıcı hesap imha sicili sunar.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📡</div>
+        <h3>Çoklu Dışa Aktarma</h3>
+        <p>Sürüm notlarınızı yalnızca web'de değil; standart Markdown (.md), RSS 2.0 XML akışı ve JSON Feed API olarak da kullanabilirsiniz.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <h3>Doğrulanmış Posta Sunucusu</h3>
+        <p>Kayıt esnasında geçerli DNS ve posta sunucusu (MX) kontrolü yapılarak sahte veya geçici adreslerin girişi engellenir.</p>
       </div>
     </div>
-    {% endfor %}
   </div>
-  {% else %}
-  <div class="empty-state">
-    <p>Henüz kayıtlı proje bulunmuyor. GitHub'dan bir webhook gönderildiğinde veya kontrol panelinden proje eklendiğinde burada görünecektir.</p>
-    <a href="/dashboard" class="btn btn-sm btn-primary">İlk Projeyi Ekle</a>
+</section>
+
+<!-- 4 Product Modes -->
+<section class="section section-alt" id="modes">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">İhtiyacınıza Uygun 4 Çalışma Modu</h2>
+      <p class="section-subtitle">Açık kaynak araçların en güçlü yönlerini bir araya getiren esnek ayrıştırma motoru.</p>
+    </div>
+
+    <div class="modes-grid">
+      <div class="mode-card">
+        <div class="mode-header">
+          <span class="mode-tag">Varsayılan</span>
+          <h3>🧠 AI Editoryal Modu</h3>
+        </div>
+        <p>Karmaşık kod commit'lerini müşterilerinizin ilgisini çekecek akıcı sürüm bültenlerine dönüştürür. Kesinti anında kural motoruna düşer.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-header">
+          <span class="mode-tag tag-code">git-cliff stili</span>
+          <h3>⚡ Conventional Commits</h3>
+        </div>
+        <p>Angular regex standardı: <code>feat:</code>, <code>fix:</code>, <code>perf:</code> kalıplarını sıfır gecikmeyle anında kategorize eder.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-header">
+          <span class="mode-tag tag-pr">release-drafter stili</span>
+          <h3>🏷️ PR Odaklı Mod</h3>
+        </div>
+        <p>Commit mesajları yerine Pull Request başlıklarını ve etiketlerini (enhancement, bug) temel alarak sürüm notu çıkarır.</p>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-header">
+          <span class="mode-tag tag-git">auto-changelog stili</span>
+          <h3>📜 Ham Git Log Modu</h3>
+        </div>
+        <p>Geliştirici ekipleri için commit hash'leri, yazar bilgileri ve doğrudan commit başlıklarıyla şeffaf bir git günlüğü sunar.</p>
+      </div>
+    </div>
   </div>
-  {% endif %}
-</div>
+</section>
+
+<!-- How It Works -->
+<section class="section" id="how-it-works">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">Nasıl Çalışır? 3 Kolay Adım</h2>
+      <p class="section-subtitle">Karmaşık kurulumlar veya karmaşık araçlar olmadan 2 dakika içinde başlayın.</p>
+    </div>
+
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <div class="step-body">
+          <h4>Projenizi Ekleyin</h4>
+          <p>Kontrol panelinizden projenize bir ad verin. Size özel Webhook URL'i ve gizli anahtarınız anında üretilsin.</p>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <div class="step-body">
+          <h4>GitHub Webhook'unu Ekleyin</h4>
+          <p>Deponuzun <strong>Settings &rarr; Webhooks</strong> sekmesine üretilen URL'i yapıştırın ve <code>push</code> olayını seçin.</p>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <div class="step-body">
+          <h4>Sitenize Gömün veya Paylaşın</h4>
+          <p>Tek satırlık hafif widget kodunu sitenize ekleyin ya da <code>/c/proje-adi</code> genel sayfanızı kullanıcılarınıza duyurun.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Widget Showcase Section -->
+<section class="section section-alt" id="widget">
+  <div class="container widget-showcase-wrap">
+    <div class="widget-text-side">
+      <span class="sub-badge">Sıfır Bağımlılık &bull; &lt;15KB</span>
+      <h2>Web Sitenize Tek Satır Kodla Entegre Edin</h2>
+      <p>
+        Shadow DOM teknolojisi sayesinde sitenizdeki hiçbir CSS stili widget'ı bozmaz, 
+        widget da sitenizi etkilemez. Ziyaretçileriniz için okunmamış bildirim rozeti sunar.
+      </p>
+      <div class="code-copy-box">
+        <code>&lt;script src="{{ app_url }}/static/js/widget.js" data-key="PROJE_KEYINIZ" async&gt;&lt;/script&gt;</code>
+      </div>
+      <div style="margin-top: 1rem;">
+        <a href="/register" class="btn btn-primary">Hemen Kodunuzu Alın &rarr;</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Projects Showcase -->
+<section class="section">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">Kayıtlı Projeler & Sürüm Günlükleri</h2>
+      <p class="section-subtitle">Platformda yayınlanan güncel changelog'lara göz atın.</p>
+    </div>
+
+    {% if projects %}
+    <div class="projects-grid">
+      {% for p in projects %}
+      <div class="project-card" style="border-top: 3px solid {{ p.brand_color }}">
+        <div class="project-header">
+          <h4>{{ p.name }}</h4>
+          <span class="repo-tag">{{ p.github_repo_full_name }}</span>
+        </div>
+        <div class="project-tags">
+          <span class="mode-badge">{{ p.parse_mode }}</span>
+          <span class="mode-badge">{{ p.audience }}</span>
+        </div>
+        <div class="project-actions">
+          <a href="/c/{{ p.slug }}" class="btn-sm btn-outline">Changelog &rarr;</a>
+          <a href="/c/{{ p.slug }}/export.md" class="btn-sm btn-ghost" download>Markdown</a>
+          <button class="btn-sm btn-ghost copy-btn" data-key="{{ p.widget_key }}">Widget</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <p>Henüz kayıtlı proje bulunmuyor. İlk projenizi ekleyerek başlayabilirsiniz.</p>
+      <a href="/dashboard" class="btn btn-primary btn-sm">İlk Projeyi Ekle</a>
+    </div>
+    {% endif %}
+  </div>
+</section>
 {% endblock %}
