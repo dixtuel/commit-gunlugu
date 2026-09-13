@@ -117,7 +117,7 @@ impl LlmFallbackEngine {
     pub fn new(config: Config) -> Self {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(12))
+            .timeout(Duration::from_secs(15))
             .build()
             .unwrap_or_default();
 
