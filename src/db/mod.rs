@@ -277,30 +277,17 @@ pub async fn upsert_project(
     Ok(())
 }
 
-pub async fn update_project_modes(
-    pool: &DbPool,
-    project_id: &str,
-    user_id: &str,
-    parse_mode: &str,
-    audience: &str,
-    template_style: &str,
-) -> Result<(), AppError> {
-    sqlx::query(
-        r#"
-        UPDATE projects
-        SET parse_mode = ?, audience = ?, template_style = ?, updated_at = datetime('now')
-        WHERE id = ? AND user_id = ?
-        "#
+pub async fn commit_sha_exists(pool: &DbPool, project_id: &str, sha: &str) -> Result<bool, AppError> {
+    let pattern = format!("%{}%", sha);
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT 1 FROM entries WHERE project_id = ? AND source_commit_shas LIKE ? LIMIT 1"
     )
-    .bind(parse_mode)
-    .bind(audience)
-    .bind(template_style)
     .bind(project_id)
-    .bind(user_id)
-    .execute(pool)
+    .bind(pattern)
+    .fetch_optional(pool)
     .await?;
 
-    Ok(())
+    Ok(row.is_some())
 }
 
 pub async fn update_project_full_settings(

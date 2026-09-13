@@ -1,23 +1,70 @@
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Duration;
 
 use crate::config::Config;
 use crate::llm::deterministic::{generate_deterministic_entry, EntryDraft};
 use crate::sanitizer::sanitize_text;
 
-const SYSTEM_PROMPT: &str = r#"Sen bir SaaS ve yazılım ürününün son kullanıcılarına yönelik editoryal sürüm günlüğü (changelog) editörüsün.
+const SYSTEM_PROMPT: &str = r#"Sen bir yazılım ürününün son kullanıcılarına yönelik editoryal sürüm günlüğü (changelog) editörüsün.
 Sana git commit mesajları ve/veya bir Pull Request başlığı ve açıklaması verilecek.
 Görevin:
 1. Teknik jargondan ve commit ön eklerinden (feat:, fix:, chore:, merge, refactor vb.) arındırılmış, son kullanıcının değerini anlayacağı TEK bir sürüm notu üretmek.
-2. Kişisel e-posta, iç dosya yolları veya hassas verileri asla metne dahil etmemek.
+2. Kişisel e-posta, iç dosya yolları, commit hash'leri veya hassas verileri asla metne dahil etmemek.
 3. Kategori olarak yalnızca şu üçünden birini seçmek: "NEW" (yeni özellik), "FIX" (hata giderme), "IMPROVEMENT" (iyileştirme/performans).
-4. Yalnızca aşağıdaki geçerli JSON şemasında yanıt dönmek:
+4. Kesinlikle yapay emoji (🚀, 🐛, ⚡, ✨ vb.) kullanma. Temiz, sade ve profesyonel bir dil kullan.
+5. Asla uydurma faturalandırma veya kurumsal özelliklerden bahsetme.
+6. Yalnızca aşağıdaki geçerli JSON formatında yanıt dön, başka hiçbir açıklama veya selamlama metni ekleme:
 {
   "category": "NEW" | "FIX" | "IMPROVEMENT",
   "title": "Kısa ve net başlık (en fazla 80 karakter)",
   "body": "Son kullanıcıya faydasını anlatan 1-2 cümlelik açıklama (en fazla 280 karakter)"
 }"#;
+
+#[derive(Clone)]
+struct ModelProfile {
+    name: String,
+    temperature: f32,
+    top_p: f32,
+    max_tokens: u32,
+    extra: Value,
+}
+
+fn known_profile(name: &str) -> ModelProfile {
+    match name {
+        "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.2,
+            top_p: 0.95,
+            max_tokens: 1024,
+            // reasoning_budget=-1 disables budget enforcement on NVIDIA NIM
+            extra: json!({ "reasoning_budget": -1 }),
+        },
+        "deepseek-ai/deepseek-v4-flash-0731" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.2,
+            top_p: 0.95,
+            max_tokens: 1024,
+            // reasoning_effort="none" disables thinking on DeepSeek
+            extra: json!({ "reasoning_effort": "none" }),
+        },
+        "google/gemma-4-31b-it" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.2,
+            top_p: 1.0,
+            max_tokens: 1024,
+            // chat_template_kwargs.enable_thinking=false disables thinking on Gemma
+            extra: json!({ "chat_template_kwargs": { "enable_thinking": false } }),
+        },
+        other => ModelProfile {
+            name: other.to_string(),
+            temperature: 0.2,
+            top_p: 0.95,
+            max_tokens: 1024,
+            extra: json!({}),
+        },
+    }
+}
 
 #[derive(Clone)]
 pub struct LlmFallbackEngine {
@@ -43,7 +90,8 @@ struct Message {
 impl LlmFallbackEngine {
     pub fn new(config: Config) -> Self {
         let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(15))
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(35))
             .build()
             .unwrap_or_default();
 
@@ -148,17 +196,20 @@ impl LlmFallbackEngine {
         user_prompt: &str,
     ) -> Result<EntryDraft, String> {
         let url = "https://integrate.api.nvidia.com/v1/chat/completions";
-        let body = json!({
-            "model": model,
+        let profile = known_profile(model);
+
+        let mut body = json!({
+            "model": profile.name,
             "messages": [
                 { "role": "system", "content": SYSTEM_PROMPT },
                 { "role": "user", "content": user_prompt }
             ],
-            "temperature": 0.1,
-            "top_p": 0.9,
-            "max_tokens": 512,
-            "response_format": { "type": "json_object" }
+            "temperature": profile.temperature,
+            "top_p": profile.top_p,
+            "max_tokens": profile.max_tokens,
+            "stream": false
         });
+        merge_json(&mut body, &profile.extra);
 
         let resp = self
             .http
@@ -203,9 +254,9 @@ impl LlmFallbackEngine {
                 { "role": "system", "content": SYSTEM_PROMPT },
                 { "role": "user", "content": user_prompt }
             ],
-            "temperature": 0.1,
-            "max_tokens": 512,
-            "response_format": { "type": "json_object" }
+            "temperature": 0.2,
+            "max_tokens": 1024,
+            "stream": false
         });
 
         let resp = self
@@ -238,6 +289,27 @@ impl LlmFallbackEngine {
     }
 }
 
+fn merge_json(body: &mut Value, extra: &Value) {
+    if let (Some(body_map), Some(extra_map)) = (body.as_object_mut(), extra.as_object()) {
+        for (k, v) in extra_map {
+            body_map.insert(k.clone(), v.clone());
+        }
+    }
+}
+
+fn strip_reasoning_blocks(raw: &str) -> String {
+    let mut text = raw.to_string();
+    while let Some(start) = text.find("<think>") {
+        if let Some(end) = text[start..].find("</think>") {
+            let end_abs = start + end + "</think>".len();
+            text.replace_range(start..end_abs, "");
+        } else {
+            break;
+        }
+    }
+    text.trim().to_string()
+}
+
 fn build_user_prompt(
     pr_title: Option<&str>,
     pr_body: Option<&str>,
@@ -264,16 +336,21 @@ fn build_user_prompt(
 }
 
 fn parse_draft_json(raw: &str) -> Result<EntryDraft, String> {
-    // Markdown code-block temizliği
-    let clean = raw
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
+    let cleaned = strip_reasoning_blocks(raw);
 
-    let draft: EntryDraft = serde_json::from_str(clean)
-        .map_err(|e| format!("EntryDraft JSON parse hatası: {}. Ham metin: {}", e, clean))?;
+    // JSON bloğunu bul: ilk { ile son } arası dilimleme
+    let json_slice = if let (Some(start), Some(end)) = (cleaned.find('{'), cleaned.rfind('}')) {
+        if start < end {
+            &cleaned[start..=end]
+        } else {
+            &cleaned
+        }
+    } else {
+        cleaned.trim_matches(|c| c == '`' || c == ' ' || c == '\n' || c == '\r')
+    };
+
+    let draft: EntryDraft = serde_json::from_str(json_slice)
+        .map_err(|e| format!("EntryDraft JSON parse hatası: {}. Ham metin: {}", e, cleaned))?;
 
     let valid_category = match draft.category.to_uppercase().as_str() {
         "NEW" => "NEW".to_string(),

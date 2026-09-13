@@ -87,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/projects/:id/settings", post(routes::api::update_project_settings_handler))
         .route("/api/v1/projects/:id/delete", post(routes::api::delete_project_handler))
         .route("/api/v1/projects/:id/entries", post(routes::api::create_manual_entry_handler))
+        .route("/api/v1/projects/:id/sync-github", post(routes::api::sync_github_commits_handler))
         .route("/api/user/delete-account", post(routes::auth::delete_account_handler));
 
     // Kimlik Doğrulama (Auth) rotaları

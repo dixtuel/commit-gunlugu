@@ -127,6 +127,7 @@
               </div>
 
               <div class="side-project-controls">
+                <button class="btn-control-sync" onclick="syncProjectGithub('{{ p.id }}', this)">GitHub'dan Çek</button>
                 <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}')">Ayarlar</button>
                 <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
               </div>

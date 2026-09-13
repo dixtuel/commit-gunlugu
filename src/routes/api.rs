@@ -318,3 +318,133 @@ pub async fn list_projects_handler(
 
     Ok(Json(projects))
 }
+
+pub async fn sync_github_commits_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+
+    let project = crate::db::find_project_by_id(&state.db, &project_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Proje bulunamadı".to_string()))?;
+
+    if project.user_id.as_deref() != Some(&user.id) {
+        return Err(AppError::Unauthorized("Bu projeyi senkronize etme yetkiniz yok".to_string()));
+    }
+
+    let repo = &project.github_repo_full_name;
+    let url = format!("https://api.github.com/repos/{}/commits?per_page=10", repo);
+
+    let mut req = reqwest::Client::builder()
+        .user_agent("commit-gunlugu/0.1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| AppError::Internal(format!("İstemci hatası: {}", e)))?
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
+
+    if let Some(ref gh_token) = state.config.github_token {
+        req = req.bearer_auth(gh_token);
+    }
+
+    let res = req
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("GitHub API isteği başarısız: {}", e)))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "GitHub API hata döndürdü (HTTP {}): {}",
+            status, body
+        )));
+    }
+
+    let commits_json: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("GitHub yanıtı parse edilemedi: {}", e)))?;
+
+    let commits = commits_json.as_array().ok_or_else(|| {
+        AppError::Internal("GitHub geçerli bir commit listesi döndürmedi".to_string())
+    })?;
+
+    let mut imported = 0;
+    // En eskiden yeniye doğru sırayla işle
+    for c in commits.iter().rev() {
+        let sha = match c.get("sha").and_then(|s| s.as_str()) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        if crate::db::commit_sha_exists(&state.db, &project.id, sha).await? {
+            continue;
+        }
+
+        let message = c
+            .get("commit")
+            .and_then(|cm| cm.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("");
+
+        let author_name = c
+            .get("author")
+            .and_then(|a| a.get("login"))
+            .and_then(|l| l.as_str())
+            .or_else(|| {
+                c.get("commit")
+                    .and_then(|cm| cm.get("author"))
+                    .and_then(|ca| ca.get("name"))
+                    .and_then(|n| n.as_str())
+            });
+
+        let first_line = message.lines().next().unwrap_or(message);
+        let commit_messages = vec![first_line.to_string()];
+        let commit_shas = vec![sha.to_string()];
+
+        let draft = match state.llm.summarize_for_project(
+            &project.parse_mode,
+            None,
+            None,
+            &commit_messages,
+            &commit_shas,
+            &[],
+        ).await {
+            Some(d) => d,
+            None => continue,
+        };
+
+        let entry = crate::db::models::Entry {
+            id: Uuid::new_v4().to_string(),
+            project_id: project.id.clone(),
+            category: draft.category,
+            title: draft.title,
+            body: draft.body,
+            status: "DRAFT".to_string(),
+            ai_generated: if project.parse_mode == "ai_editorial" { 1 } else { 0 },
+            source_commit_shas: serde_json::to_string(&commit_shas).unwrap_or_else(|_| "[]".to_string()),
+            source_pr_number: None,
+            author_username: author_name.map(crate::sanitizer::sanitize_text),
+            published_at: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        crate::db::insert_entry(&state.db, &entry).await?;
+        imported += 1;
+    }
+
+    Ok(Json(json!({
+        "success": true,
+        "imported_count": imported,
+        "message": format!("{} yeni commit içe aktarıldı ve taslak olarak eklendi.", imported)
+    })))
+}

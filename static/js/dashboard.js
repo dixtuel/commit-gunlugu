@@ -293,3 +293,28 @@ function copyText(text, label = "Metin") {
     showToast("Kopyalama başarısız oldu.", "error");
   });
 }
+
+async function syncProjectGithub(projectId, btn) {
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Çekiliyor...";
+  try {
+    const res = await fetch(`/api/v1/projects/${projectId}/sync-github`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || "Commit'ler başarıyla çekildi.");
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      showToast(data.message || "GitHub'dan çekme başarısız oldu.", "error");
+    }
+  } catch (err) {
+    showToast("Sunucuya ulaşılamadı.", "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
