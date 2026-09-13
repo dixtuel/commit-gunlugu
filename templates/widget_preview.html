@@ -196,8 +196,8 @@
   </div>
 
   <script>
-    const APP_URL = "{{ app_url }}";
-    const WIDGET_KEY = "{{ widget_key }}";
+    const APP_URL = "{{ app_url | safe }}";
+    const WIDGET_KEY = "{{ widget_key | safe }}";
 
     function showToast(msg) {
       const t = document.getElementById('toast');
