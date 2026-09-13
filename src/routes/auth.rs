@@ -40,7 +40,7 @@ pub async fn login_page(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     if let Some(token) = extract_session_token(&headers) {
-        if get_user_from_session(&state.db, &token).await?.is_some() {
+        if get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref()).await?.is_some() {
             return Ok(Redirect::to("/dashboard").into_response());
         }
     }
@@ -58,7 +58,7 @@ pub async fn login_submit(
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
     let email = form.email.trim().to_lowercase();
-    let user_opt = find_user_by_email(&state.db, &email).await?;
+    let user_opt = find_user_by_email(&state.db, &email, state.config.token_encryption_key.as_deref()).await?;
 
     let valid = if let Some(ref u) = user_opt {
         verify_password(&form.password, &u.password_hash)
@@ -113,7 +113,7 @@ pub async fn register_page(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     if let Some(token) = extract_session_token(&headers) {
-        if get_user_from_session(&state.db, &token).await?.is_some() {
+        if get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref()).await?.is_some() {
             return Ok(Redirect::to("/dashboard").into_response());
         }
     }
@@ -165,7 +165,7 @@ pub async fn register_submit(
         return render_error("Girdiğiniz şifreler birbiriyle eşleşmiyor.");
     }
 
-    if find_user_by_email(&state.db, &email).await?.is_some() {
+    if find_user_by_email(&state.db, &email, state.config.token_encryption_key.as_deref()).await?.is_some() {
         return render_error("Bu e-posta adresi zaten kullanımda. Giriş yapmayı deneyin.");
     }
 
@@ -173,13 +173,14 @@ pub async fn register_submit(
     let new_user = User {
         id: Uuid::new_v4().to_string(),
         email: email.clone(),
+        email_hash: None,
         password_hash,
         name: form.name.filter(|n| !n.trim().is_empty()),
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
     };
 
-    create_user(&state.db, &new_user).await?;
+    create_user(&state.db, &new_user, state.config.token_encryption_key.as_deref()).await?;
     tracing::info!("Yeni kullanıcı kaydedildi: {}", email);
 
     // Otomatik oturum aç
@@ -228,22 +229,32 @@ pub struct ForgotPasswordForm {
 
 pub async fn forgot_password_page(
     State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Response, AppError> {
+    if !state.config.is_smtp_configured() {
+        return Ok(Redirect::to("/login").into_response());
+    }
+
     let tmpl = state.jinja.get_template("forgot_password.html")
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let html = tmpl.render(context! { app_url => state.config.app_url })
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    Ok(Html(html))
+    Ok(Html(html).into_response())
 }
 
 pub async fn forgot_password_submit(
     State(state): State<AppState>,
     Form(form): Form<ForgotPasswordForm>,
-) -> Result<impl IntoResponse, AppError> {
-    let email = form.email.trim().to_lowercase();
+) -> Result<Response, AppError> {
+    if !state.config.is_smtp_configured() {
+        return Ok(Redirect::to("/login").into_response());
+    }
 
-    if let Ok(Some(user)) = find_user_by_email(&state.db, &email).await {
+    let email = form.email.trim().to_lowercase();
+    let user_opt = find_user_by_email(&state.db, &email, state.config.token_encryption_key.as_deref()).await.ok().flatten();
+
+    if let Some(user) = user_opt {
+        tracing::info!("Şifre sıfırlama talebi alındı, kayıtlı hesap bulundu: [{}]", user.email);
         let (raw_token, token_hash) = generate_reset_token();
         let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
         let reset_id = Uuid::new_v4().to_string();
@@ -252,12 +263,15 @@ pub async fn forgot_password_submit(
 
         let reset_link = format!("{}/reset-password?token={}", state.config.app_url.trim_end_matches('/'), raw_token);
 
-        let sent = crate::email::send_password_reset_email(&state.config, &email, &reset_link).await;
-        if !sent {
-            // SMTP göndergesi başarısız olduysa (ör. yerel MTA yapılandırılmamış
-            // bir geliştirme ortamı) bağlantıyı sunucu logunda görünür bırak.
-            tracing::info!("Şifre sıfırlama bağlantısı [{}]: {}", email, reset_link);
+        let sent = crate::email::send_password_reset_email(&state.config, &user.email, &reset_link).await;
+        if sent {
+            tracing::info!("Şifre sıfırlama e-postası başarıyla gönderildi: [{}]", user.email);
+        } else {
+            tracing::warn!("SMTP üzerinden e-posta gönderilemedi. Yedek log kaydı [{}]: {}", user.email, reset_link);
         }
+    } else {
+        // Kullanıcı kuralı: O e-postayla sistemde kayıtlı hesap yoksa KESİNLİKLE mail gitmesin!
+        tracing::warn!("Şifre sıfırlama talebi reddedildi: [{}] adresiyle kayıtlı kullanıcı bulunamadı, mail GÖNDERİLMEYECEK.", email);
     }
 
     // Kullanıcı sayma (enumeration) saldırısını önlemek için her durumda aynı başarılı mesaj
@@ -268,7 +282,7 @@ pub async fn forgot_password_submit(
         app_url => state.config.app_url
     }).map_err(|e| AppError::Internal(e.to_string()))?;
 
-    Ok(Html(html))
+    Ok(Html(html).into_response())
 }
 
 // ---------------------------------------------------------------------------
@@ -291,10 +305,14 @@ pub async fn reset_password_page(
     State(state): State<AppState>,
     Query(query): Query<ResetPasswordQuery>,
 ) -> Result<Response, AppError> {
+    if !state.config.is_smtp_configured() {
+        return Ok(Redirect::to("/login").into_response());
+    }
+
     let raw_token = match query.token {
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
         _ => {
-            return Ok(Redirect::to("/forgot-password").into_response());
+            return Ok(Redirect::to("/login").into_response());
         }
     };
 
@@ -326,6 +344,10 @@ pub async fn reset_password_submit(
     State(state): State<AppState>,
     Form(form): Form<ResetPasswordForm>,
 ) -> Result<Response, AppError> {
+    if !state.config.is_smtp_configured() {
+        return Ok(Redirect::to("/login").into_response());
+    }
+
     let raw_token = form.token.trim();
     let token_hash = hash_token(raw_token);
 
@@ -403,7 +425,7 @@ pub async fn update_profile_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -438,7 +460,7 @@ pub async fn change_password_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -488,7 +510,7 @@ pub async fn delete_account_handler(
 ) -> Result<Response, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -500,12 +522,11 @@ pub async fn delete_account_handler(
         return Err(AppError::Unauthorized("Girdiğiniz şifre hatalı. Hesap silinemedi.".to_string()));
     }
 
-    // KVKK Kalıcı İmha & (yapılandırılmışsa) Uzak Ledger Senkronizasyonu
+    // KVKK Kalıcı İmha & Yerel Ledger Kaydı
     crate::auth::erasure::purge_user(
         &state.db,
         &user.id,
         &user.email,
-        state.config.r2_erasure_remote.clone(),
     )
     .await?;
 

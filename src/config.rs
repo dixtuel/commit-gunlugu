@@ -16,12 +16,6 @@ pub struct Config {
     /// 64 hex karakterlik (32 byte) AES-256-GCM anahtarı. Tanımlı değilse tokenlar
     /// düz metin olarak saklanır (geliştirme/self-host varsayılanı).
     pub token_encryption_key: Option<String>,
-    /// KVKK imha ledger'ının senkronize edileceği isteğe bağlı rclone hedefi
-    /// (ör. "kendi-remote-adin:bucket/yol"). Bu proje açık kaynak olduğu için
-    /// hiçbir paylaşılan/varsayılan remote GÖMÜLMEZ — kendi altyapınızın
-    /// kimlik bilgilerini kendi .env dosyanızda tanımlamanız gerekir. Boşsa
-    /// ledger yalnızca yerel olarak (SQLite + data/erasure-ledger.jsonl) tutulur.
-    pub r2_erasure_remote: Option<String>,
     /// Şifre sıfırlama e-postası göndermek için isteğe bağlı SMTP ayarları.
     /// R2_ERASURE_REMOTE ile aynı ilke: bu açık kaynak proje hiçbir altyapıya
     /// (ör. belirli bir SMTP sunucusu/domain) varsayılan olarak bağımlı DEĞİLDİR.
@@ -89,10 +83,6 @@ impl Config {
             .ok()
             .filter(|k| !k.trim().is_empty());
 
-        let r2_erasure_remote = env::var("R2_ERASURE_REMOTE")
-            .ok()
-            .filter(|r| !r.trim().is_empty());
-
         let smtp_host = env::var("SMTP_HOST")
             .ok()
             .filter(|h| !h.trim().is_empty());
@@ -123,12 +113,18 @@ impl Config {
             webhook_rate_limit_per_minute,
             api_rate_limit_per_minute,
             token_encryption_key,
-            r2_erasure_remote,
             smtp_host,
             smtp_port,
             smtp_from,
             legal_entity_name,
             privacy_contact_email,
         }
+    }
+
+    pub fn is_smtp_configured(&self) -> bool {
+        self.smtp_host
+            .as_deref()
+            .map(|h| !h.trim().is_empty())
+            .unwrap_or(false)
     }
 }

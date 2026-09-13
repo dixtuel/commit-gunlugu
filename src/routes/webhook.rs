@@ -63,9 +63,12 @@ pub async fn handle_github_webhook(
         None
     };
 
-    let secret = project_opt
+    let decrypted_secret = project_opt
         .as_ref()
-        .map(|p| p.webhook_secret.as_str())
+        .map(|p| crate::crypto::token::decrypt_token(&p.webhook_secret, state.config.token_encryption_key.as_deref()));
+
+    let secret = decrypted_secret
+        .as_deref()
         .unwrap_or(state.config.default_webhook_secret.as_str());
 
     verify_github_signature(secret, sig_header, &body)?;

@@ -3,13 +3,14 @@ use sqlx::SqlitePool;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::error::AppError;
 
-const LOCAL_LEDGER_PATH: &str = "data/erasure-ledger.jsonl";
+pub const LOCAL_LEDGER_PATH: &str = "data/erasure-ledger.jsonl";
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ErasureRecord {
     pub user_id: String,
     pub email_hash: String,
@@ -24,13 +25,12 @@ pub fn hash_email(email: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Kullanıcının hesabını ve tüm ilişkili verilerini KVKK kapsamında kalıcı olarak siler,
-/// imha ledger'ına işler ve R2 nesne deposuna bağımsız olarak senkronize eder.
+/// Kullanıcının hesabını ve tüm ilişkili verilerini KVKK kapsamında kalıcı olarak siler
+/// ve imha ledger'ına (hem SQLite hem data/erasure-ledger.jsonl) işler.
 pub async fn purge_user(
     pool: &SqlitePool,
     user_id: &str,
     email: &str,
-    r2_remote: Option<String>,
 ) -> Result<(), AppError> {
     let email_hash = hash_email(email);
     let now = chrono::Utc::now().to_rfc3339();
@@ -78,73 +78,14 @@ pub async fn purge_user(
         }
     }
 
-    // 4. Yapılandırılmışsa asenkron olarak kendi R2 remote'unuza kopyala
-    // (Arka plan task'ı, kullanıcıyı bekletmez). R2_ERASURE_REMOTE tanımlı
-    // değilse ledger yalnızca yerel SQLite + jsonl dosyasında kalır.
-    if let Some(remote) = r2_remote {
-        tokio::spawn(async move {
-            sync_ledger_to_r2(&remote).await;
-        });
-    }
-
     tracing::info!("KVKK Hesap İmhası tamamlandı: user_id={}, email_hash={}", user_id, email_hash);
     Ok(())
 }
 
-/// Yapılandırılmış rclone hedefine (R2_ERASURE_REMOTE) imha ledger'ını senkronize eder
-async fn sync_ledger_to_r2(remote: &str) {
-    if !Path::new(LOCAL_LEDGER_PATH).exists() {
-        return;
-    }
-
-    let remote_owned = remote.to_string();
-    let status = tokio::task::spawn_blocking(move || {
-        std::process::Command::new("rclone")
-            .args(["copyto", LOCAL_LEDGER_PATH, &remote_owned])
-            .status()
-    })
-    .await;
-
-    match status {
-        Ok(Ok(s)) if s.success() => {
-            tracing::info!("İmha ledger'ı başarıyla senkronize edildi ({})", remote);
-        }
-        Ok(Ok(s)) => {
-            tracing::warn!("İmha ledger senkronizasyonu hata verdi (çıkış kodu: {:?})", s.code());
-        }
-        Ok(Err(e)) => {
-            tracing::debug!("rclone çalıştırılamadı (yerel ledger güncel): {}", e);
-        }
-        Err(e) => {
-            tracing::debug!("spawn_blocking hatası: {}", e);
-        }
-    }
-}
-
-/// Sunucu açılışında (yapılandırılmışsa) uzak ledger'ı indirir ve eski bir
-/// yedekten dönülmüş olabilecek "hayalet" (ghost) kullanıcıları tekrar imha eder.
-/// `r2_remote` boşsa (varsayılan, açık kaynak self-host durumu) indirme adımı
-/// atlanır, sadece yerel ledger dosyası (varsa) okunur.
-pub async fn apply_erasure_ledger_on_startup(pool: &SqlitePool, r2_remote: Option<&str>) {
-    // 1. Yapılandırılmışsa uzak remote'tan en güncel ledger'ı çekmeyi dene
-    if let Some(remote) = r2_remote {
-        let remote_owned = remote.to_string();
-        let download = tokio::task::spawn_blocking(move || {
-            std::process::Command::new("rclone")
-                .args(["copyto", &remote_owned, LOCAL_LEDGER_PATH])
-                .status()
-        })
-        .await;
-
-        if let Ok(Ok(s)) = download {
-            if s.success() {
-                tracing::info!("Uzak imha ledger'ı başarıyla indirildi.");
-            }
-        }
-    } else {
-        tracing::debug!("R2_ERASURE_REMOTE tanımlı değil, yalnızca yerel imha ledger'ı kullanılıyor.");
-    }
-
+/// Sunucu açılışında ve periyodik retention kontrollerinde imha ledger'ını okur;
+/// eski bir sistem/veritabanı yedeğinden dönülmüş olabilecek "hayalet" (ghost)
+/// kullanıcıları tespit ederek anında yeniden imha eder.
+pub async fn apply_erasure_ledger(pool: &SqlitePool) {
     if !Path::new(LOCAL_LEDGER_PATH).exists() {
         return;
     }
@@ -171,7 +112,7 @@ pub async fn apply_erasure_ledger_on_startup(pool: &SqlitePool, r2_remote: Optio
 
             if let Some((uid,)) = exists {
                 tracing::warn!(
-                    "⚠️ KVKK KURTARMA KORUMASI: Eski yedekten dirilen kullanıcı (ID: {}) tespit edildi, anında imha ediliyor!",
+                    "⚠️ KVKK RETENTION KORUMASI: Eski yedekten dirilen kullanıcı (ID: {}) tespit edildi, anında imha ediliyor!",
                     uid
                 );
                 let _ = sqlx::query("DELETE FROM users WHERE id = ?")
@@ -184,8 +125,24 @@ pub async fn apply_erasure_ledger_on_startup(pool: &SqlitePool, r2_remote: Optio
     }
 
     if purged_count > 0 {
-        tracing::warn!("KVKK Restore Hook tamamlandı: {} adet hayalet kullanıcı imha edildi.", purged_count);
+        tracing::warn!("KVKK Retention Hook tamamlandı: {} adet hayalet kullanıcı imha edildi.", purged_count);
     } else {
-        tracing::info!("KVKK Restore Hook kontrolü temiz: Eski yedekten dirilen kullanıcı yok.");
+        tracing::debug!("KVKK Retention kontrolü temiz: Eski yedekten dirilen kullanıcı yok.");
     }
+}
+
+/// Arka planda düzenli aralıklarla çalışan retention bakım döngüsü.
+/// Sunucu açıkken eski bir SQLite dosyası yedekten dönülse dahi belirli aralıklarla
+/// imha ledger'ını tarayıp hayalet kullanıcıları otomatik olarak temizler.
+pub fn spawn_retention_worker(pool: SqlitePool) {
+    tokio::spawn(async move {
+        // İlk kontrol: 5 dakika sonra
+        tokio::time::sleep(Duration::from_secs(300)).await;
+        let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Her saat başı
+
+        loop {
+            interval.tick().await;
+            apply_erasure_ledger(&pool).await;
+        }
+    });
 }

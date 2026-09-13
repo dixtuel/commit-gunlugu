@@ -15,7 +15,7 @@ pub async fn landing_page(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     let current_user = if let Some(token) = extract_session_token(&headers) {
-        get_user_from_session(&state.db, &token).await.ok().flatten()
+        get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref()).await.ok().flatten()
     } else {
         None
     };
@@ -50,7 +50,7 @@ pub async fn dashboard_page(
         None => return Ok(Redirect::to("/login?redirect=/dashboard").into_response()),
     };
 
-    let user = match get_user_from_session(&state.db, &session_token).await? {
+    let user = match get_user_from_session(&state.db, &session_token, state.config.token_encryption_key.as_deref()).await? {
         Some(u) => u,
         None => return Ok(Redirect::to("/login?redirect=/dashboard").into_response()),
     };

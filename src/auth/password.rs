@@ -55,9 +55,19 @@ pub fn generate_session_token() -> String {
     hex::encode(bytes)
 }
 
+/// E-posta adresini arama yapılabilir kör indeks (searchable blind index) için
+/// normalize edip SHA-256 ile özetler. Veritabanında açık e-posta saklanmaz.
+pub fn hash_email(email: &str) -> String {
+    let normalized = email.trim().to_lowercase();
+    let mut hasher = Sha256::new();
+    hasher.update(normalized.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     #[test]
     fn test_password_hash_and_verify() {

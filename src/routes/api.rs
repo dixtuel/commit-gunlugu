@@ -83,7 +83,7 @@ pub async fn publish_entry_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    get_user_from_session(&state.db, &token)
+    get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -98,7 +98,7 @@ pub async fn dismiss_entry_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    get_user_from_session(&state.db, &token)
+    get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -113,7 +113,7 @@ pub async fn delete_entry_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -132,7 +132,7 @@ pub async fn delete_project_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Oturum açmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -164,7 +164,7 @@ pub async fn create_project_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Proje eklemek için giriş yapmalısınız.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -185,6 +185,11 @@ pub async fn create_project_handler(
         payload.github_repo_full_name.replace('/', "-").to_lowercase()
     });
 
+    let encrypted_webhook_secret = encrypt_token_for_storage(
+        &state.config.default_webhook_secret,
+        state.config.token_encryption_key.as_deref(),
+    );
+
     let project = Project {
         id: Uuid::new_v4().to_string(),
         user_id: Some(user.id),
@@ -195,7 +200,7 @@ pub async fn create_project_handler(
         brand_name: None,
         brand_color: payload.brand_color.unwrap_or_else(|| "#5b8a7a".to_string()),
         brand_logo_url: None,
-        webhook_secret: state.config.default_webhook_secret.clone(),
+        webhook_secret: encrypted_webhook_secret,
         parse_mode: payload.parse_mode.unwrap_or_else(|| "ai_editorial".to_string()),
         audience: payload.audience.unwrap_or_else(|| "end_user".to_string()),
         template_style: payload.template_style.unwrap_or_else(|| "standard".to_string()),
@@ -229,7 +234,7 @@ pub async fn update_project_settings_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -298,7 +303,7 @@ pub async fn create_manual_entry_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
@@ -348,7 +353,7 @@ pub async fn list_projects_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers);
     let user = if let Some(ref t) = token {
-        get_user_from_session(&state.db, t).await?
+        get_user_from_session(&state.db, t, state.config.token_encryption_key.as_deref()).await?
     } else {
         None
     };
@@ -369,7 +374,7 @@ pub async fn sync_github_commits_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let token = extract_session_token(&headers)
         .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
-    let user = get_user_from_session(&state.db, &token)
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
         .await?
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 

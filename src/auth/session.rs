@@ -2,7 +2,8 @@ use axum::http::HeaderMap;
 use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
 
-use crate::auth::password::generate_session_token;
+use crate::auth::password::{generate_session_token, hash_token};
+use crate::crypto::token::decrypt_token;
 use crate::db::models::User;
 use crate::error::AppError;
 
@@ -23,47 +24,61 @@ pub fn extract_session_token(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-/// Yeni bir oturum açar, veritabanına 30 günlük son kullanma tarihi ile kaydeder.
+/// Yeni bir oturum açar. Token veritabanında SHA-256 hash'lenmiş olarak saklanır (at-rest token hashing);
+/// istemciye ise yalnızca ham çerez anahtarı teslim edilir.
 pub async fn create_session(pool: &SqlitePool, user_id: &str) -> Result<String, AppError> {
-    let token = generate_session_token();
+    let raw_token = generate_session_token();
+    let token_hash = hash_token(&raw_token);
     let expires_at = (Utc::now() + Duration::days(30)).to_rfc3339();
 
     sqlx::query(
         "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
     )
-    .bind(&token)
+    .bind(&token_hash)
     .bind(user_id)
     .bind(&expires_at)
     .execute(pool)
     .await?;
 
-    Ok(token)
+    Ok(raw_token)
 }
 
 /// Verilen oturum anahtarına karşılık gelen geçerli (süresi dolmamış) kullanıcıyı döndürür.
+/// Hem yeni hash'lenmiş oturumları hem geriye dönük eski oturumları sabit zamanlı arar;
+/// kullanıcının şifreli e-postasını çözer.
 pub async fn get_user_from_session(
     pool: &SqlitePool,
     session_token: &str,
+    key_hex: Option<&str>,
 ) -> Result<Option<User>, AppError> {
     let now = Utc::now().to_rfc3339();
-    let user = sqlx::query_as::<_, User>(
+    let token_hash = hash_token(session_token);
+
+    let mut user = sqlx::query_as::<_, User>(
         r#"
         SELECT u.* FROM users u
         INNER JOIN sessions s ON s.user_id = u.id
-        WHERE s.id = ? AND s.expires_at > ?
+        WHERE (s.id = ? OR s.id = ?) AND s.expires_at > ?
         "#,
     )
+    .bind(&token_hash)
     .bind(session_token)
     .bind(now)
     .fetch_optional(pool)
     .await?;
+
+    if let Some(ref mut u) = user {
+        u.email = decrypt_token(&u.email, key_hex);
+    }
 
     Ok(user)
 }
 
 /// Oturumu sonlandırır.
 pub async fn destroy_session(pool: &SqlitePool, session_token: &str) -> Result<(), AppError> {
-    sqlx::query("DELETE FROM sessions WHERE id = ?")
+    let token_hash = hash_token(session_token);
+    sqlx::query("DELETE FROM sessions WHERE id = ? OR id = ?")
+        .bind(&token_hash)
         .bind(session_token)
         .execute(pool)
         .await?;

@@ -144,3 +144,19 @@ pub async fn send_password_reset_email(config: &Config, to_email: &str, reset_ur
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_send_email_disabled_when_no_host() {
+        let mut config = Config::from_env();
+        config.smtp_host = None;
+
+        let res = send_password_reset_email(&config, "test@example.com", "https://commit.dixtuel.tr/reset-password?token=test1234").await;
+        assert!(!res, "SMTP_HOST boşken e-posta gönderilmemeli");
+    }
+}
+
+

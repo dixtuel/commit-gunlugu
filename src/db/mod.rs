@@ -6,11 +6,13 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
+use crate::auth::password::hash_email;
+use crate::crypto::token::{decrypt_token, encrypt_token_for_storage};
 use crate::error::AppError;
 
 pub type DbPool = Pool<Sqlite>;
 
-pub async fn init_db(database_url: &str) -> Result<DbPool, AppError> {
+pub async fn init_db(database_url: &str, token_encryption_key: Option<&str>) -> Result<DbPool, AppError> {
     let options = SqliteConnectOptions::from_str(database_url)
         .map_err(|e| AppError::Internal(format!("Geçersiz DATABASE_URL: {}", e)))?
         .create_if_missing(true)
@@ -30,46 +32,93 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, AppError> {
         .await
         .map_err(|e| AppError::Internal(format!("Migrasyon hatası: {}", e)))?;
 
-    tracing::info!("SQLite veritabanı başlatıldı (WAL modu aktif, Auth tabloları hazır)");
+    // Eski açık metin e-postaları güvenli şekilde şifreli ve hashli formata dönüştür (sıfır veri kaybı)
+    if let Err(e) = migrate_encrypted_users(&pool, token_encryption_key).await {
+        tracing::warn!("Eski kullanıcı e-postalarını şifreleme uyarısı: {}", e);
+    }
+
+    tracing::info!("SQLite veritabanı başlatıldı (WAL modu aktif, Auth ve Şifreleme tabloları hazır)");
     Ok(pool)
+}
+
+/// Henüz şifrelenmemiş veya email_hash'i üretilmemiş kullanıcıları otomatik olarak
+/// AES-256-GCM ile şifreler ve deterministik kör indeks (email_hash) oluşturur.
+pub async fn migrate_encrypted_users(pool: &DbPool, key_hex: Option<&str>) -> Result<(), AppError> {
+    let users = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE email_hash IS NULL OR email NOT LIKE 'enc:%'"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    for u in users {
+        let plain_email = decrypt_token(&u.email, key_hex);
+        let e_hash = hash_email(&plain_email);
+        let enc_email = encrypt_token_for_storage(&plain_email, key_hex);
+
+        sqlx::query("UPDATE users SET email = ?, email_hash = ? WHERE id = ?")
+            .bind(&enc_email)
+            .bind(&e_hash)
+            .bind(&u.id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
 // KULLANICI & KİMLİK DOĞRULAMA SORGULARI
 // ---------------------------------------------------------------------------
 
-pub async fn find_user_by_email(pool: &DbPool, email: &str) -> Result<Option<User>, AppError> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT * FROM users WHERE LOWER(email) = LOWER(?)",
+pub async fn find_user_by_email(pool: &DbPool, email: &str, key_hex: Option<&str>) -> Result<Option<User>, AppError> {
+    let email_trimmed = email.trim().to_lowercase();
+    let email_hash = hash_email(&email_trimmed);
+
+    let mut user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE email_hash = ? OR LOWER(email) = LOWER(?)",
     )
-    .bind(email.trim())
+    .bind(&email_hash)
+    .bind(&email_trimmed)
     .fetch_optional(pool)
     .await?;
+
+    if let Some(ref mut u) = user {
+        u.email = decrypt_token(&u.email, key_hex);
+    }
 
     Ok(user)
 }
 
 #[allow(dead_code)]
-pub async fn find_user_by_id(pool: &DbPool, id: &str) -> Result<Option<User>, AppError> {
-    let user = sqlx::query_as::<_, User>(
+pub async fn find_user_by_id(pool: &DbPool, id: &str, key_hex: Option<&str>) -> Result<Option<User>, AppError> {
+    let mut user = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
     .await?;
 
+    if let Some(ref mut u) = user {
+        u.email = decrypt_token(&u.email, key_hex);
+    }
+
     Ok(user)
 }
 
-pub async fn create_user(pool: &DbPool, user: &User) -> Result<(), AppError> {
+pub async fn create_user(pool: &DbPool, user: &User, key_hex: Option<&str>) -> Result<(), AppError> {
+    let email_trimmed = user.email.trim().to_lowercase();
+    let email_hash = hash_email(&email_trimmed);
+    let stored_email = encrypt_token_for_storage(&email_trimmed, key_hex);
+
     sqlx::query(
         r#"
-        INSERT INTO users (id, email, password_hash, name, created_at, updated_at)
-        VALUES (?, LOWER(?), ?, ?, datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, email_hash, password_hash, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         "#,
     )
     .bind(&user.id)
-    .bind(&user.email)
+    .bind(&stored_email)
+    .bind(&email_hash)
     .bind(&user.password_hash)
     .bind(&user.name)
     .execute(pool)
@@ -531,3 +580,85 @@ pub async fn log_webhook_event(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::password::hash_token;
+    use crate::auth::session::{create_session, get_user_from_session};
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_encrypted_user_roundtrip_and_blind_index() {
+        let key = hex::encode([42u8; 32]);
+        let pool = init_db("sqlite::memory:", Some(&key)).await.unwrap();
+
+        let raw_email = "GizliTestUser@Example.Com";
+        let user_id = Uuid::new_v4().to_string();
+        let user = User {
+            id: user_id.clone(),
+            email: raw_email.to_string(),
+            email_hash: None,
+            password_hash: "argon2_test_hash".to_string(),
+            name: Some("Test User".to_string()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        // 1. Kullanıcıyı kaydet (şifreli ve hashli)
+        create_user(&pool, &user, Some(&key)).await.unwrap();
+
+        // 2. Doğrudan DB'den ham sütunları kontrol et
+        let (stored_email, stored_hash): (String, Option<String>) = sqlx::query_as(
+            "SELECT email, email_hash FROM users WHERE id = ?"
+        )
+        .bind(&user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        // Ham e-posta kesinlikle düz metin olmamalı, enc: öneki taşımalıdır!
+        assert!(stored_email.starts_with("enc:"), "Veritabanındaki e-posta şifrelenmiş olmalıdır");
+        assert!(!stored_email.contains("GizliTestUser"), "Açık e-posta veritabanında görünmemelidir");
+        assert!(stored_hash.is_some(), "email_hash kör indeksi doldurulmuş olmalıdır");
+
+        // 3. Büyük/küçük harf farketmeksizin blind index ile ara
+        let found = find_user_by_email(&pool, "gizlitestuser@example.com", Some(&key))
+            .await
+            .unwrap()
+            .expect("Kullanıcı bulunmalıdır");
+
+        assert_eq!(found.id, user_id);
+        assert_eq!(found.email, "gizlitestuser@example.com");
+
+        // 4. Olmayan e-posta sorgusu None dönmeli
+        let missing = find_user_by_email(&pool, "olmayan@example.com", Some(&key))
+            .await
+            .unwrap();
+        assert!(missing.is_none(), "Kayıtsız e-posta None dönmelidir");
+
+        // 5. Oturum aç ve token'ın DB'de hashli saklandığını doğrula
+        let raw_session_token = create_session(&pool, &user_id).await.unwrap();
+        let token_hash = hash_token(&raw_session_token);
+
+        let (stored_session_id,): (String,) = sqlx::query_as(
+            "SELECT id FROM sessions WHERE user_id = ?"
+        )
+        .bind(&user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(stored_session_id, token_hash, "Oturum anahtarı veritabanında SHA-256 ile hashli saklanmalıdır");
+        assert_ne!(stored_session_id, raw_session_token, "Oturum anahtarı düz metin saklanamaz");
+
+        // 6. Ham session token ile kullanıcı oturumu çözümlenebilmelidir
+        let session_user = get_user_from_session(&pool, &raw_session_token, Some(&key))
+            .await
+            .unwrap()
+            .expect("Oturum geçerli olmalıdır");
+        assert_eq!(session_user.id, user_id);
+        assert_eq!(session_user.email, "gizlitestuser@example.com");
+    }
+}
+

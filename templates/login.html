@@ -34,7 +34,9 @@
       <div class="form-group">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <label for="password" style="margin-bottom: 0;">Şifre</label>
+          {% if smtp_enabled %}
           <a href="/forgot-password" class="auth-sublink">Şifremi unuttum</a>
+          {% endif %}
         </div>
         <input type="password" id="password" name="password" required class="input-text" placeholder="••••••••">
       </div>

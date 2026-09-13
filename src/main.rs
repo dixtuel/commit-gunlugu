@@ -42,16 +42,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env();
     tracing::info!("Yapılandırma yüklendi, port: {}", config.port);
 
-    // 1. Veritabanı ve migrasyon başlatıcı
-    let db_pool = init_db(&config.database_url).await?;
+    // 1. Veritabanı, migrasyon ve otomatik şifreleme başlatıcı
+    let db_pool = init_db(&config.database_url, config.token_encryption_key.as_deref()).await?;
 
-    // 2. KVKK İmha Ledger'ı & Restore Replay Hook'u
-    // (Eski bir SQLite yedeğinden dönülmüşse, silinen kullanıcıları otomatik tekrar imha eder)
-    auth::erasure::apply_erasure_ledger_on_startup(&db_pool, config.r2_erasure_remote.as_deref()).await;
+    // 2. KVKK İmha Ledger'ı & Restore Retention Hook'u
+    // (Eski bir sistem yedeğinden dönülmüşse, silinen kullanıcıları otomatik tekrar imha eder)
+    auth::erasure::apply_erasure_ledger(&db_pool).await;
+    auth::erasure::spawn_retention_worker(db_pool.clone());
 
     // 3. Minijinja şablon motoru
     let mut jinja_env = minijinja::Environment::new();
     jinja_env.set_loader(path_loader("templates"));
+    jinja_env.add_global("smtp_enabled", config.is_smtp_configured());
 
     // 4. AI Fallback motoru (NVIDIA NIM -> Gateway -> Deterministik)
     let llm_engine = LlmFallbackEngine::new(config.clone());
