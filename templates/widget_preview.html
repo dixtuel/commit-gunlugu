@@ -47,7 +47,7 @@
       </div>
 
       <!-- Ayarlar Kontrol Paneli -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
         <!-- Format / Layout -->
         <div class="space-y-1.5">
@@ -57,13 +57,14 @@
             <option value="banner">Yatay Dikdörtgen (Banner)</option>
             <option value="card">Dikey Liste Kartı (Card)</option>
             <option value="compact">Kompakt Mini (Tek Commit)</option>
+            <option value="timeline">Zaman Çizelgesi (Timeline)</option>
             <option value="badge">Sağ Alt Açılır Buton (Badge)</option>
           </select>
         </div>
 
         <!-- Commit Sayısı (Limit) -->
         <div class="space-y-1.5">
-          <label class="text-xs font-bold text-slate-700">Gösterilecek Commit Sayısı</label>
+          <label class="text-xs font-bold text-slate-700">Gösterilecek Sayı</label>
           <select id="opt-limit" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
             <option value="1" selected>Son 1 Commit (Tek Sürüm)</option>
             <option value="2">Son 2 Commit</option>
@@ -86,14 +87,47 @@
 
         <!-- Tema (Theme) -->
         <div class="space-y-1.5">
-          <label class="text-xs font-bold text-slate-700">Renk Teması</label>
-          <select id="opt-theme" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <label class="text-xs font-bold text-slate-700">Tasarım Teması</label>
+          <select id="opt-theme" onchange="onThemeChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
             <option value="light" selected>Açık Tema (Light)</option>
             <option value="dark">Koyu Tema (Dark)</option>
             <option value="auto">Cihaza Uyumlu (Auto)</option>
+            <option value="custom">Özel Renkler (Custom)</option>
           </select>
         </div>
 
+        <!-- Gömme Modu (Mode) -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-700">Gömme Modu (Mode)</label>
+          <select id="opt-mode" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            <option value="shadow" selected>Shadow DOM (İzole Kapsül)</option>
+            <option value="lightdom">Light DOM (Sitenin Kendi CSS'i)</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Özel Renk Paleti (Custom Tema seçildiğinde açılır) -->
+      <div id="custom-colors-panel" class="hidden p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+        <div class="text-xs font-bold text-slate-700">Özel Renk Paletini Belirleyin (Custom Theme):</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="space-y-1">
+            <label class="text-[11px] text-slate-500 font-medium">Arka Plan (data-bg):</label>
+            <input type="text" id="opt-custom-bg" value="#ffffff" oninput="updateGenerator()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] text-slate-500 font-medium">Metin Rengi (data-text):</label>
+            <input type="text" id="opt-custom-text" value="#1e293b" oninput="updateGenerator()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] text-slate-500 font-medium">Vurgu/Rozet (data-accent):</label>
+            <input type="text" id="opt-custom-accent" value="#10b981" oninput="updateGenerator()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] text-slate-500 font-medium">Kenarlık (data-border):</label>
+            <input type="text" id="opt-custom-border" value="#e2e8f0" oninput="updateGenerator()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono">
+          </div>
+        </div>
       </div>
 
       <!-- Detay Toggle'ları -->
@@ -110,13 +144,17 @@
           <input type="checkbox" id="opt-show-pill" checked onchange="updateGenerator()" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
           <span>Kategori Rozetini ([YENİ]/[DÜZELTME]) Göster</span>
         </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="opt-distinct" checked onchange="updateGenerator()" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+          <span>Çoklu Projede Farklı Depolardan Seç (Distinct)</span>
+        </label>
       </div>
 
       <!-- Proje Widget Anahtarı Girişi -->
       <div class="space-y-1.5 pt-3 border-t border-slate-100">
         <div class="flex items-center justify-between">
-          <label for="opt-widget-key" class="text-xs font-bold text-slate-700">Proje Widget Anahtarınız (data-key):</label>
-          <span class="text-[11px] text-slate-400">Kendi proje anahtarınızı yazabilir veya varsayılan bırakabilirsiniz</span>
+          <label for="opt-widget-key" class="text-xs font-bold text-slate-700">Proje Widget Anahtarınız (Tek veya virgülle çoklu anahtar: data-key / data-keys):</label>
+          <span class="text-[11px] text-slate-400">Çoklu proje için w_1, w_2 şeklinde virgülle yazabilirsiniz</span>
         </div>
         <input type="text" id="opt-widget-key" value="{{ snippet_key }}" oninput="updateGenerator()" placeholder="PROJE_WIDGET_ANAHTARINIZ" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
       </div>
@@ -219,22 +257,56 @@
       }, 2200);
     }
 
+    function onThemeChange() {
+      const theme = document.getElementById('opt-theme').value;
+      const panel = document.getElementById('custom-colors-panel');
+      if (theme === 'custom') {
+        panel.classList.remove('hidden');
+      } else {
+        panel.classList.add('hidden');
+      }
+      updateGenerator();
+    }
+
     function getSelectedWidgetKey() {
       const el = document.getElementById('opt-widget-key');
       const val = el ? el.value.trim() : '';
       return val || 'PROJE_WIDGET_ANAHTARINIZ';
     }
 
-    function generateSnippet(layout, limit, width, theme, showDesc, showDate, showPill) {
+    function generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors) {
       const key = getSelectedWidgetKey();
       if (layout === 'badge') {
-        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script src="${APP_URL}/widget.js" data-key="${key}" async><\/script>`;
+        let badgeAttrs = [`src="${APP_URL}/widget.js"`, `data-key="${key}"`];
+        if (theme && theme !== 'auto') badgeAttrs.push(`data-theme="${theme}"`);
+        badgeAttrs.push('async');
+        return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script ${badgeAttrs.join(' ')}><\/script>`;
       }
 
-      let attrs = [`class="commit-gunlugu-widget"`, `data-key="${key}"`, `data-layout="${layout}"`];
+      let attrs = [`class="commit-gunlugu-widget"`];
+      if (key.includes(',')) {
+        attrs.push(`data-keys="${key}"`);
+      } else {
+        attrs.push(`data-key="${key}"`);
+      }
+
+      attrs.push(`data-layout="${layout}"`);
+      if (mode && mode !== 'shadow') attrs.push(`data-mode="${mode}"`);
       if (limit) attrs.push(`data-limit="${limit}"`);
       if (width && width !== '100%') attrs.push(`data-width="${width}"`);
       if (theme && theme !== 'auto') attrs.push(`data-theme="${theme}"`);
+
+      if (theme === 'custom' && customColors) {
+        if (customColors.bg) attrs.push(`data-bg="${customColors.bg}"`);
+        if (customColors.text) attrs.push(`data-text="${customColors.text}"`);
+        if (customColors.accent) attrs.push(`data-accent="${customColors.accent}"`);
+        if (customColors.border) attrs.push(`data-border="${customColors.border}"`);
+      }
+
+      if (key.includes(',') && !distinct) {
+        attrs.push(`data-distinct="false"`);
+      }
+
       if (!showDesc) attrs.push(`data-show-desc="false"`);
       if (!showDate) attrs.push(`data-show-date="false"`);
       if (!showPill) attrs.push(`data-show-pill="false"`);
@@ -247,11 +319,20 @@
       const limit = document.getElementById('opt-limit').value;
       const width = document.getElementById('opt-width').value;
       const theme = document.getElementById('opt-theme').value;
+      const mode = document.getElementById('opt-mode').value;
       const showDesc = document.getElementById('opt-show-desc').checked;
       const showDate = document.getElementById('opt-show-date').checked;
       const showPill = document.getElementById('opt-show-pill').checked;
+      const distinct = document.getElementById('opt-distinct').checked;
 
-      const snippet = generateSnippet(layout, limit, width, theme, showDesc, showDate, showPill);
+      const customColors = {
+        bg: document.getElementById('opt-custom-bg').value.trim(),
+        text: document.getElementById('opt-custom-text').value.trim(),
+        accent: document.getElementById('opt-custom-accent').value.trim(),
+        border: document.getElementById('opt-custom-border').value.trim()
+      };
+
+      const snippet = generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors);
       document.getElementById('code-output').textContent = snippet;
 
       // Canlı Önizlemeyi Güncelle
@@ -265,9 +346,16 @@
         widgetEl.className = 'commit-gunlugu-widget';
         widgetEl.setAttribute('data-key', PREVIEW_KEY);
         widgetEl.setAttribute('data-layout', layout);
+        widgetEl.setAttribute('data-mode', mode);
         widgetEl.setAttribute('data-limit', limit);
         widgetEl.setAttribute('data-width', width);
         widgetEl.setAttribute('data-theme', theme);
+        if (theme === 'custom') {
+          if (customColors.bg) widgetEl.setAttribute('data-bg', customColors.bg);
+          if (customColors.text) widgetEl.setAttribute('data-text', customColors.text);
+          if (customColors.accent) widgetEl.setAttribute('data-accent', customColors.accent);
+          if (customColors.border) widgetEl.setAttribute('data-border', customColors.border);
+        }
         if (!showDesc) widgetEl.setAttribute('data-show-desc', 'false');
         if (!showDate) widgetEl.setAttribute('data-show-date', 'false');
         if (!showPill) widgetEl.setAttribute('data-show-pill', 'false');
@@ -296,7 +384,7 @@
     }
 
     function copyPredefined(layout, limit) {
-      const snippet = generateSnippet(layout, limit, '100%', 'light', true, true, true);
+      const snippet = generateSnippet(layout, limit, '100%', 'light', 'shadow', true, true, true, true, null);
       navigator.clipboard.writeText(snippet).then(() => {
         showToast(`${layout.toUpperCase()} widget kodu kopyalandı! ✓`);
       });
@@ -304,7 +392,7 @@
 
     // İlk açılışta kodu oluştur
     document.addEventListener('DOMContentLoaded', () => {
-      updateGenerator();
+      onThemeChange();
     });
   </script>
 

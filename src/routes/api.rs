@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -90,6 +90,143 @@ pub async fn get_widget_data(
     );
 
     Ok((headers, Json(payload)))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MultiWidgetQuery {
+    pub keys: Option<String>,
+    pub limit: Option<usize>,
+    pub distinct: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiWidgetEntry {
+    pub id: String,
+    pub category: String,
+    pub title: String,
+    pub body: String,
+    pub author: Option<String>,
+    pub published_at: String,
+    pub project_name: String,
+    pub project_slug: String,
+    pub brand_color: String,
+    pub changelog_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiWidgetPayload {
+    pub entries: Vec<MultiWidgetEntry>,
+}
+
+/// Birden fazla projenin sürüm notlarını harmanlayan çoklu proje widget JSON uç noktası.
+/// `keys`: Virgülle ayrılmış proje widget anahtarları (ör. w_1,w_2,w_3).
+/// `distinct`: true ise (varsayılan), her projeden en fazla 1 güncel kayıt seçerek çeşitlilik sağlar.
+pub async fn get_multi_widget_data(
+    State(state): State<AppState>,
+    Query(query): Query<MultiWidgetQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let raw_keys = query.keys.unwrap_or_default();
+    let keys: Vec<&str> = raw_keys.split(',').map(|k| k.trim()).filter(|k| !k.is_empty()).collect();
+    if keys.is_empty() {
+        return Err(AppError::BadRequest("En az bir widget anahtarı ('keys') belirtilmelidir.".to_string()));
+    }
+
+    let limit = query.limit.unwrap_or(3).clamp(1, 50);
+    let distinct = query.distinct.unwrap_or(true);
+
+    let mut resolved_projects = Vec::new();
+    for k in keys {
+        let proj = if k == "demo" || k == "w_demo" {
+            if let Some(ref demo_key) = state.config.demo_widget_key {
+                find_project_by_widget_key(&state.db, demo_key).await?
+            } else {
+                sqlx::query_as::<_, Project>("SELECT * FROM projects ORDER BY created_at ASC LIMIT 1")
+                    .fetch_optional(&state.db)
+                    .await?
+            }
+        } else {
+            find_project_by_widget_key(&state.db, k).await?
+        };
+
+        if let Some(p) = proj {
+            if !resolved_projects.iter().any(|existing: &Project| existing.id == p.id) {
+                resolved_projects.push(p);
+            }
+        }
+    }
+
+    if resolved_projects.is_empty() {
+        return Err(AppError::NotFound("Belirtilen anahtarlarla eşleşen proje bulunamadı.".to_string()));
+    }
+
+    let mut all_entries = Vec::new();
+    let mut per_project_newest: Vec<MultiWidgetEntry> = Vec::new();
+
+    for p in &resolved_projects {
+        let entries = list_entries_for_project(&state.db, &p.id, true).await?;
+        let changelog_url = format!("{}/c/{}", state.config.app_url.trim_end_matches('/'), p.slug);
+        let project_name = p.brand_name.clone().unwrap_or_else(|| p.name.clone());
+
+        let mapped_entries: Vec<MultiWidgetEntry> = entries
+            .into_iter()
+            .map(|e| MultiWidgetEntry {
+                id: e.id,
+                category: e.category,
+                title: e.title,
+                body: e.body,
+                author: e.author_username,
+                published_at: e.published_at.unwrap_or(e.created_at),
+                project_name: project_name.clone(),
+                project_slug: p.slug.clone(),
+                brand_color: p.brand_color.clone(),
+                changelog_url: changelog_url.clone(),
+            })
+            .collect();
+
+        if let Some(newest) = mapped_entries.first() {
+            per_project_newest.push(newest.clone());
+        }
+        all_entries.extend(mapped_entries);
+    }
+
+    let mut result_entries = Vec::new();
+
+    if distinct {
+        per_project_newest.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+        for item in per_project_newest {
+            result_entries.push(item);
+            if result_entries.len() >= limit {
+                break;
+            }
+        }
+
+        if result_entries.len() < limit {
+            all_entries.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+            for item in all_entries {
+                if !result_entries.iter().any(|e| e.id == item.id) {
+                    result_entries.push(item);
+                    if result_entries.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        all_entries.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+        result_entries = all_entries.into_iter().take(limit).collect();
+    }
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=60, s-maxage=60"),
+    );
+
+    Ok((headers, Json(MultiWidgetPayload { entries: result_entries })))
 }
 
 /// Gömülebilir JavaScript betiğini doğrudan sıfır önbellek (no-cache) garantisiyle sunar.
