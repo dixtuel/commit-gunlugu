@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 use crate::crypto::hmac::verify_github_signature;
 use crate::db::models::{Entry, Project, WebhookEvent};
-use crate::db::{find_project_by_repo, insert_entry, log_webhook_event, upsert_project};
+use crate::db::{
+    delete_entries_by_commit_shas, delete_entry_by_title_or_tag, find_project_by_repo,
+    insert_entry, log_webhook_event, upsert_project,
+};
 use crate::error::AppError;
 use crate::sanitizer::sanitize_author;
 use crate::state::AppState;
@@ -159,6 +162,89 @@ pub async fn handle_github_webhook(
     })))
 }
 
+/// GitHub Compare API kullanarak `after...before` karşılaştırması yapar.
+/// Bu sayede force push veya branch geçmişi yeniden yazımında (rebase, squash, amend)
+/// branch geçmişinden çıkarılan (ezilen / silinen) commit SHA'larını tam liste olarak döner.
+async fn fetch_discarded_commits(
+    repo: &str,
+    after: &str,
+    before: &str,
+    token: Option<&str>,
+) -> Vec<String> {
+    if repo.is_empty()
+        || after.is_empty()
+        || before.is_empty()
+        || after == before
+        || after.chars().all(|c| c == '0')
+        || before.chars().all(|c| c == '0')
+    {
+        return Vec::new();
+    }
+
+    let url = format!("https://api.github.com/repos/{}/compare/{}...{}", repo, after, before);
+
+    let client = match reqwest::Client::builder()
+        .user_agent("commit-gunlugu/0.1.0")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("GitHub compare için reqwest client oluşturulamadı: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let mut req = client
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
+
+    if let Some(t) = token {
+        let trimmed = t.trim();
+        if !trimmed.is_empty() {
+            req = req.bearer_auth(trimmed);
+        }
+    }
+
+    match req.send().await {
+        Ok(res) => {
+            if !res.status().is_success() {
+                tracing::warn!(
+                    "GitHub compare API yanıtı başarısız (status {}): repo={}, {}...{}",
+                    res.status(),
+                    repo,
+                    after,
+                    before
+                );
+                return Vec::new();
+            }
+
+            match res.json::<Value>().await {
+                Ok(body) => {
+                    let mut shas = Vec::new();
+                    if let Some(commits) = body.get("commits").and_then(|c| c.as_array()) {
+                        for c in commits {
+                            if let Some(sha) = c.get("sha").and_then(|s| s.as_str()) {
+                                shas.push(sha.to_string());
+                            }
+                        }
+                    }
+                    shas
+                }
+                Err(e) => {
+                    tracing::warn!("GitHub compare API JSON parse hatası: {}", e);
+                    Vec::new()
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("GitHub compare API isteği başarısız: {}", e);
+            Vec::new()
+        }
+    }
+}
+
 async fn process_event_background(
     state: AppState,
     project_id: String,
@@ -167,6 +253,87 @@ async fn process_event_background(
 ) -> Result<(), AppError> {
     match event_type.as_str() {
         "push" => {
+            // Projenin ayarlarını ve repo bilgilerini çek
+            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
+                crate::db::models::Project {
+                    id: project_id.clone(),
+                    user_id: None,
+                    github_repo_full_name: "bilinmeyen/repo".to_string(),
+                    name: "Proje".to_string(),
+                    slug: "proje".to_string(),
+                    widget_key: "w_def".to_string(),
+                    brand_name: None,
+                    brand_color: "#10b981".to_string(),
+                    brand_logo_url: None,
+                    webhook_secret: "".to_string(),
+                    parse_mode: "ai_editorial".to_string(),
+                    audience: "end_user".to_string(),
+                    template_style: "standard".to_string(),
+                    is_private: 0,
+                    custom_github_token: None,
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                }
+            });
+
+            let forced = payload.get("forced").and_then(|f| f.as_bool()).unwrap_or(false);
+            let deleted = payload.get("deleted").and_then(|d| d.as_bool()).unwrap_or(false);
+            let before = payload.get("before").and_then(|b| b.as_str()).unwrap_or("").trim();
+            let after = payload.get("after").and_then(|a| a.as_str()).unwrap_or("").trim();
+
+            let is_branch_deleted = deleted || after.chars().all(|c| c == '0') || after.is_empty();
+
+            // 1. Force Push, Amend/Reset veya Branch Silinmesi Durumunda Eski Commit'leri Temizle
+            if forced || is_branch_deleted {
+                let repo_name = payload
+                    .get("repository")
+                    .and_then(|r| r.get("full_name"))
+                    .and_then(|f| f.as_str())
+                    .unwrap_or(&project.github_repo_full_name);
+
+                let effective_token = project.custom_github_token.as_deref().and_then(|t| {
+                    let decrypted = crate::crypto::token::decrypt_token(t.trim(), state.config.token_encryption_key.as_deref());
+                    if decrypted.is_empty() { None } else { Some(decrypted) }
+                }).or_else(|| state.config.github_token.clone());
+
+                let mut discarded_shas = Vec::new();
+
+                // Force push yapıldıysa ve her iki SHA da geçerliyse compare API ile geçmişten çıkarılan commit'leri bul
+                if forced && !is_branch_deleted && !before.chars().all(|c| c == '0') && !before.is_empty() {
+                    let mut api_shas = fetch_discarded_commits(repo_name, after, before, effective_token.as_deref()).await;
+                    discarded_shas.append(&mut api_shas);
+                }
+
+                // Eski HEAD (before) geçerli bir SHA ise ve listede henüz yoksa ekle
+                if !before.is_empty() && !before.chars().all(|c| c == '0') && !discarded_shas.iter().any(|s| s == before) {
+                    discarded_shas.push(before.to_string());
+                }
+
+                if !discarded_shas.is_empty() {
+                    match delete_entries_by_commit_shas(&state.db, &project_id, &discarded_shas).await {
+                        Ok(deleted_titles) => {
+                            if !deleted_titles.is_empty() {
+                                tracing::info!(
+                                    "Force push/silinme nedeniyle {} adet sürüm notu temizlendi (proje: {}, repo: {}): {:?}",
+                                    deleted_titles.len(),
+                                    project_id,
+                                    repo_name,
+                                    deleted_titles
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Force push sürüm notu temizleme hatası: {:?}", e);
+                        }
+                    }
+                }
+            }
+
+            // Branch silindiyse ekleme yapmadan işlemi sonlandır
+            if is_branch_deleted {
+                return Ok(());
+            }
+
             let commits = payload
                 .get("commits")
                 .and_then(|c| c.as_array())
@@ -195,29 +362,6 @@ async fn process_event_background(
                     primary_author = Some(sanitize_author(name, username));
                 }
             }
-
-            // Projenin parse_mode ayarını çek
-            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
-                crate::db::models::Project {
-                    id: project_id.clone(),
-                    user_id: None,
-                    github_repo_full_name: "bilinmeyen/repo".to_string(),
-                    name: "Proje".to_string(),
-                    slug: "proje".to_string(),
-                    widget_key: "w_def".to_string(),
-                    brand_name: None,
-                    brand_color: "#10b981".to_string(),
-                    brand_logo_url: None,
-                    webhook_secret: "".to_string(),
-                    parse_mode: "ai_editorial".to_string(),
-                    audience: "end_user".to_string(),
-                    template_style: "standard".to_string(),
-                    is_private: 0,
-                    custom_github_token: None,
-                    created_at: "".to_string(),
-                    updated_at: "".to_string(),
-                }
-            });
 
             // Proje moduna göre ayrıştırma motorunu çalıştır
             let draft = match state.llm.summarize_for_project(
@@ -413,6 +557,25 @@ async fn process_event_background(
         }
         "release" => {
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
+            if action == "deleted" {
+                let release = payload.get("release");
+                let tag_name = release.and_then(|r| r.get("tag_name")).and_then(|t| t.as_str()).unwrap_or("");
+                let name = release.and_then(|r| r.get("name")).and_then(|n| n.as_str()).unwrap_or(tag_name);
+                let title = if !name.is_empty() {
+                    name.to_string()
+                } else if !tag_name.is_empty() {
+                    format!("Sürüm {}", tag_name)
+                } else {
+                    String::new()
+                };
+
+                if !title.is_empty() {
+                    let _ = delete_entry_by_title_or_tag(&state.db, &project_id, &title).await;
+                    tracing::info!("Silinen GitHub Release nedeniyle sürüm notu temizlendi: {}", title);
+                }
+                return Ok(());
+            }
+
             if action != "published" {
                 return Ok(());
             }
@@ -454,4 +617,238 @@ async fn process_event_background(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::db::init_db;
+    use crate::llm::client::LlmFallbackEngine;
+
+    fn mock_app_state(pool: crate::db::DbPool) -> AppState {
+        let config = Config {
+            host: "127.0.0.1".to_string(),
+            port: 8095,
+            database_url: "sqlite::memory:".to_string(),
+            default_webhook_secret: "test_secret".to_string(),
+            nvidia_nim_api_key: None,
+            nvidia_nim_models: vec![],
+            app_url: "http://localhost:8095".to_string(),
+            github_token: None,
+            webhook_rate_limit_per_minute: 60,
+            api_rate_limit_per_minute: 60,
+            token_encryption_key: None,
+            smtp_host: None,
+            smtp_port: 587,
+            smtp_from: "noreply@example.com".to_string(),
+            legal_entity_name: "Test Entity".to_string(),
+            privacy_contact_email: None,
+            demo_widget_key: None,
+        };
+        let llm = LlmFallbackEngine::new(config.clone());
+        let jinja = minijinja::Environment::new();
+        AppState::new(pool, llm, config, jinja)
+    }
+
+    #[tokio::test]
+    async fn test_webhook_push_forced_deletes_old_entry() {
+        let pool = init_db("sqlite::memory:", None).await.unwrap();
+        let state = mock_app_state(pool.clone());
+        let project_id = "test-proj-force-1";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "owner/repo".to_string(),
+            name: "Repo".to_string(),
+            slug: "repo".to_string(),
+            widget_key: "w_key".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let old_sha = "a1b2c3d4e5f67890abcdef1234567890abcdef12";
+        let entry = Entry {
+            id: "entry-to-be-deleted".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "Eski Commit Başlığı".to_string(),
+            body: "Açıklama".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 1,
+            source_commit_shas: serde_json::to_string(&vec![old_sha]).unwrap(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(chrono::Utc::now().to_rfc3339()),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        insert_entry(&pool, &entry).await.unwrap();
+
+        // Push payload: forced = true, before = old_sha (commit reset or amend)
+        let payload = json!({
+            "forced": true,
+            "deleted": false,
+            "before": old_sha,
+            "after": "fedcba0987654321fedcba0987654321fedcba09",
+            "commits": [],
+            "repository": {
+                "full_name": "owner/repo",
+                "name": "repo"
+            }
+        });
+
+        process_event_background(state, project_id.to_string(), "push".to_string(), payload)
+            .await
+            .unwrap();
+
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 0, "Force push sonrası eski commit'e ait sürüm notu silinmelidir");
+    }
+
+    #[tokio::test]
+    async fn test_webhook_push_deleted_branch_cleans_entry() {
+        let pool = init_db("sqlite::memory:", None).await.unwrap();
+        let state = mock_app_state(pool.clone());
+        let project_id = "test-proj-del-1";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "owner/del-repo".to_string(),
+            name: "DelRepo".to_string(),
+            slug: "del-repo".to_string(),
+            widget_key: "w_del_key".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let branch_sha = "branch_head_sha_1234567890abcdef123456";
+        let entry = Entry {
+            id: "entry-branch-deleted".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "Silinecek Dalın Notu".to_string(),
+            body: "Açıklama".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 1,
+            source_commit_shas: serde_json::to_string(&vec![branch_sha]).unwrap(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(chrono::Utc::now().to_rfc3339()),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        insert_entry(&pool, &entry).await.unwrap();
+
+        let payload = json!({
+            "forced": false,
+            "deleted": true,
+            "before": branch_sha,
+            "after": "0000000000000000000000000000000000000000",
+            "commits": [],
+            "repository": {
+                "full_name": "owner/del-repo",
+                "name": "del-repo"
+            }
+        });
+
+        process_event_background(state, project_id.to_string(), "push".to_string(), payload)
+            .await
+            .unwrap();
+
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 0, "Silinen branch'e ait sürüm notu veritabanından temizlenmelidir");
+    }
+
+    #[tokio::test]
+    async fn test_webhook_release_deleted_cleans_entry() {
+        let pool = init_db("sqlite::memory:", None).await.unwrap();
+        let state = mock_app_state(pool.clone());
+        let project_id = "test-proj-rel-del";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "owner/rel-repo".to_string(),
+            name: "RelRepo".to_string(),
+            slug: "rel-repo".to_string(),
+            widget_key: "w_rel_key".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let entry = Entry {
+            id: "entry-release-del".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "v2.0.0 Büyük Sürüm".to_string(),
+            body: "Açıklama".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 0,
+            source_commit_shas: "[]".to_string(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(chrono::Utc::now().to_rfc3339()),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        insert_entry(&pool, &entry).await.unwrap();
+
+        let payload = json!({
+            "action": "deleted",
+            "release": {
+                "tag_name": "v2.0.0",
+                "name": "v2.0.0 Büyük Sürüm"
+            },
+            "repository": {
+                "full_name": "owner/rel-repo",
+                "name": "rel-repo"
+            }
+        });
+
+        process_event_background(state, project_id.to_string(), "release".to_string(), payload)
+            .await
+            .unwrap();
+
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 0, "Silinen GitHub Release sürüm notu veritabanından temizlenmelidir");
+    }
 }

@@ -4,6 +4,7 @@ use chrono::Utc;
 use models::{Entry, PasswordReset, Project, User, WebhookEvent};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Sqlite};
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::auth::password::hash_email;
@@ -448,6 +449,91 @@ pub async fn delete_entry(
     Ok(res.rows_affected() > 0)
 }
 
+/// Force push, amend veya branch silinmesi durumunda ezilen/silinen commit SHA'larına
+/// ait sürüm notlarını veritabanından temizler.
+pub async fn delete_entries_by_commit_shas(
+    pool: &DbPool,
+    project_id: &str,
+    shas: &[String],
+) -> Result<Vec<String>, AppError> {
+    if shas.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut deleted_titles = Vec::new();
+    let mut deleted_ids = HashSet::new();
+
+    for sha in shas {
+        let clean_sha = sha.trim();
+        if clean_sha.len() < 7 {
+            continue;
+        }
+
+        let pattern = format!("%{}%", clean_sha);
+
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT id, title, source_commit_shas FROM entries WHERE project_id = ? AND source_commit_shas LIKE ?"
+        )
+        .bind(project_id)
+        .bind(&pattern)
+        .fetch_all(pool)
+        .await?;
+
+        for (entry_id, title, raw_shas) in rows {
+            if deleted_ids.contains(&entry_id) {
+                continue;
+            }
+
+            let matches = if let Ok(parsed_shas) = serde_json::from_str::<Vec<String>>(&raw_shas) {
+                parsed_shas.iter().any(|s| {
+                    let s_clean = s.trim();
+                    s_clean == clean_sha
+                        || (clean_sha.len() >= 7 && s_clean.starts_with(clean_sha))
+                        || (s_clean.len() >= 7 && clean_sha.starts_with(s_clean))
+                })
+            } else {
+                raw_shas.contains(clean_sha)
+            };
+
+            if matches {
+                sqlx::query("DELETE FROM entries WHERE id = ?")
+                    .bind(&entry_id)
+                    .execute(pool)
+                    .await?;
+
+                deleted_ids.insert(entry_id);
+                deleted_titles.push(title);
+            }
+        }
+    }
+
+    Ok(deleted_titles)
+}
+
+/// Başlığa veya etiket adına göre sürüm notunu siler (ör. silinen GitHub Release temizliği)
+pub async fn delete_entry_by_title_or_tag(
+    pool: &DbPool,
+    project_id: &str,
+    title_or_tag: &str,
+) -> Result<bool, AppError> {
+    let clean = title_or_tag.trim();
+    if clean.is_empty() {
+        return Ok(false);
+    }
+
+    let pattern = format!("%{}%", clean);
+    let res = sqlx::query(
+        "DELETE FROM entries WHERE project_id = ? AND (title = ? OR title LIKE ?)"
+    )
+    .bind(project_id)
+    .bind(clean)
+    .bind(&pattern)
+    .execute(pool)
+    .await?;
+
+    Ok(res.rows_affected() > 0)
+}
+
 // ---------------------------------------------------------------------------
 // GİRİŞLER (ENTRIES) VE WEBHOOK LOGLARI
 // ---------------------------------------------------------------------------
@@ -659,6 +745,102 @@ mod tests {
             .expect("Oturum geçerli olmalıdır");
         assert_eq!(session_user.id, user_id);
         assert_eq!(session_user.email, "gizlitestuser@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_delete_entries_by_commit_shas() {
+        let pool = init_db("sqlite::memory:", None).await.unwrap();
+        let project_id = "test-proj-123";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "test/repo".to_string(),
+            name: "Test Repo".to_string(),
+            slug: "test-repo".to_string(),
+            widget_key: "w_test".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let entry1 = Entry {
+            id: "entry-1".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "Eski Amend Edilen Özellik".to_string(),
+            body: "Açıklama".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 1,
+            source_commit_shas: serde_json::to_string(&vec!["old_sha_1234567890abcdef"]).unwrap(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        let entry2 = Entry {
+            id: "entry-2".to_string(),
+            project_id: project_id.to_string(),
+            category: "FIX".to_string(),
+            title: "Kalan Kalıcı Düzeltme".to_string(),
+            body: "Açıklama".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 1,
+            source_commit_shas: serde_json::to_string(&vec!["keep_sha_9876543210fedcba"]).unwrap(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        insert_entry(&pool, &entry1).await.unwrap();
+        insert_entry(&pool, &entry2).await.unwrap();
+
+        // 1. Eski sha silindiğinde (force push / amend simülasyonu)
+        let deleted = delete_entries_by_commit_shas(
+            &pool,
+            project_id,
+            &["old_sha_1234567890abcdef".to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0], "Eski Amend Edilen Özellik");
+
+        // 2. Kalan entry kontrolü
+        let remaining = list_entries_for_project(&pool, project_id, false)
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, "entry-2");
+
+        // 3. Olmayan veya çok kısa sha çağrısı hiçbir şeyi silmemeli
+        let deleted_empty = delete_entries_by_commit_shas(
+            &pool,
+            project_id,
+            &["short".to_string()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(deleted_empty.len(), 0);
+
+        let remaining_after = list_entries_for_project(&pool, project_id, false)
+            .await
+            .unwrap();
+        assert_eq!(remaining_after.len(), 1);
     }
 }
 
