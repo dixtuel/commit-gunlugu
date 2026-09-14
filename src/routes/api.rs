@@ -53,7 +53,13 @@ pub async fn get_widget_data(
             .ok_or_else(|| AppError::NotFound("Geçersiz widget anahtarı".to_string()))?
     };
 
-    let entries = list_entries_for_project(&state.db, &project.id, true).await?;
+    let entries = list_entries_for_project(
+        &state.db,
+        &project.id,
+        true,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
 
     let widget_entries: Vec<WidgetEntry> = entries
         .into_iter()
@@ -163,7 +169,13 @@ pub async fn get_multi_widget_data(
     let mut per_project_newest: Vec<MultiWidgetEntry> = Vec::new();
 
     for p in &resolved_projects {
-        let entries = list_entries_for_project(&state.db, &p.id, true).await?;
+        let entries = list_entries_for_project(
+            &state.db,
+            &p.id,
+            true,
+            state.config.token_encryption_key.as_deref(),
+        )
+        .await?;
         let changelog_url = format!("{}/c/{}", state.config.app_url.trim_end_matches('/'), p.slug);
         let project_name = p.brand_name.clone().unwrap_or_else(|| p.name.clone());
 
@@ -519,7 +531,12 @@ pub async fn create_manual_entry_handler(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    crate::db::insert_entry(&state.db, &entry).await?;
+    crate::db::insert_entry(
+        &state.db,
+        &entry,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
 
     Ok((StatusCode::CREATED, Json(entry)))
 }
@@ -713,7 +730,12 @@ pub async fn sync_github_commits_handler(
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
-            let _ = crate::db::insert_entry(&state_clone.db, &entry).await;
+            let _ = crate::db::insert_entry(
+                &state_clone.db,
+                &entry,
+                state_clone.config.token_encryption_key.as_deref(),
+            )
+            .await;
             tracing::info!("Arka plan GitHub commit sürüm notu yayına alındı: {}", entry.title);
         }
     });

@@ -392,7 +392,7 @@ async fn process_event_background(
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
-            insert_entry(&state.db, &entry).await?;
+            insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
             tracing::info!("Yeni push sürüm notu otomatik yayına alındı (mod: {}): {}", project.parse_mode, entry.title);
         }
         "pull_request" => {
@@ -480,7 +480,7 @@ async fn process_event_background(
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
-            insert_entry(&state.db, &entry).await?;
+            insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
             tracing::info!("Yeni PR sürüm notu otomatik yayına alındı: {}", entry.title);
         }
         "commit_comment" => {
@@ -551,7 +551,7 @@ async fn process_event_background(
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
-            insert_entry(&state.db, &entry).await?;
+            insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
             let short_sha = if commit_id.len() >= 7 { &commit_id[..7] } else { commit_id };
             tracing::info!("Yeni commit_comment sürüm notu otomatik yayına alındı (commit: {}): {}", short_sha, entry.title);
         }
@@ -610,7 +610,7 @@ async fn process_event_background(
                 updated_at: chrono::Utc::now().to_rfc3339(),
             };
 
-            insert_entry(&state.db, &entry).await?;
+            insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
             tracing::info!("Resmi GitHub Release sürüm notu eklendi: {}", entry.title);
         }
         _ => {}
@@ -694,7 +694,7 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        insert_entry(&pool, &entry).await.unwrap();
+        insert_entry(&pool, &entry, None).await.unwrap();
 
         // Push payload: forced = true, before = old_sha (commit reset or amend)
         let payload = json!({
@@ -713,7 +713,7 @@ mod tests {
             .await
             .unwrap();
 
-        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false, None)
             .await
             .unwrap();
         assert_eq!(remaining.len(), 0, "Force push sonrası eski commit'e ait sürüm notu silinmelidir");
@@ -762,7 +762,7 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        insert_entry(&pool, &entry).await.unwrap();
+        insert_entry(&pool, &entry, None).await.unwrap();
 
         let payload = json!({
             "forced": false,
@@ -780,7 +780,7 @@ mod tests {
             .await
             .unwrap();
 
-        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false, None)
             .await
             .unwrap();
         assert_eq!(remaining.len(), 0, "Silinen branch'e ait sürüm notu veritabanından temizlenmelidir");
@@ -828,7 +828,7 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        insert_entry(&pool, &entry).await.unwrap();
+        insert_entry(&pool, &entry, None).await.unwrap();
 
         let payload = json!({
             "action": "deleted",
@@ -846,7 +846,7 @@ mod tests {
             .await
             .unwrap();
 
-        let remaining = crate::db::list_entries_for_project(&pool, project_id, false)
+        let remaining = crate::db::list_entries_for_project(&pool, project_id, false, None)
             .await
             .unwrap();
         assert_eq!(remaining.len(), 0, "Silinen GitHub Release sürüm notu veritabanından temizlenmelidir");

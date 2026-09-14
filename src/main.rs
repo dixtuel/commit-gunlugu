@@ -48,6 +48,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Veritabanı, migrasyon ve otomatik şifreleme başlatıcı
     let db_pool = init_db(&config.database_url, config.token_encryption_key.as_deref()).await?;
 
+    // CLI Bayrağı Kontrolü: Tek seferlik harici retention bakımı (systemd timer veya cron için)
+    if std::env::args().any(|a| a == "--retention" || a == "--retention-maintenance") {
+        tracing::info!("Tek seferlik KVKK ve Retention bakım döngüsü başlatılıyor...");
+        let report = auth::erasure::run_retention_cleanup(&db_pool).await?;
+        tracing::info!(
+            "Retention bakımı başarıyla tamamlandı: {} hayalet hesap, {} süresi dolmuş oturum, {} şifre sıfırlama, {} webhook logu temizlendi.",
+            report.purged_ghost_users,
+            report.expired_sessions,
+            report.expired_resets,
+            report.expired_webhooks
+        );
+        return Ok(());
+    }
+
     // 2. KVKK İmha Ledger'ı & Restore Retention Hook'u
     // (Eski bir sistem yedeğinden dönülmüşse, silinen kullanıcıları otomatik tekrar imha eder)
     auth::erasure::apply_erasure_ledger(&db_pool).await;

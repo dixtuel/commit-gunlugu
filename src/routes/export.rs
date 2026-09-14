@@ -19,7 +19,13 @@ pub async fn export_markdown_handler(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(&state.db, &project.id, true).await?;
+    let entries = list_entries_for_project(
+        &state.db,
+        &project.id,
+        true,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
 
     let mut md = String::new();
     md.push_str(&format!("# {} — Sürüm Günlüğü (Changelog)\n\n", project.name));
@@ -78,7 +84,13 @@ pub async fn export_rss_handler(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(&state.db, &project.id, true).await?;
+    let entries = list_entries_for_project(
+        &state.db,
+        &project.id,
+        true,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
     let project_url = format!("{}/c/{}", state.config.app_url.trim_end_matches('/'), project.slug);
 
     let mut rss = String::new();
@@ -120,7 +132,13 @@ pub async fn export_json_handler(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(&state.db, &project.id, true).await?;
+    let entries = list_entries_for_project(
+        &state.db,
+        &project.id,
+        true,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
     let project_url = format!("{}/c/{}", state.config.app_url.trim_end_matches('/'), project.slug);
 
     let items: Vec<serde_json::Value> = entries

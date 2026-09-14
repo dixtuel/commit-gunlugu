@@ -17,7 +17,13 @@ pub async fn public_changelog_page(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(&state.db, &project.id, true).await?;
+    let entries = list_entries_for_project(
+        &state.db,
+        &project.id,
+        true,
+        state.config.token_encryption_key.as_deref(),
+    )
+    .await?;
 
     let tmpl = state
         .jinja

@@ -21,7 +21,7 @@ pub async fn landing_page(
     };
 
     let projects = list_all_projects(&state.db).await?;
-    let entries = list_all_recent_entries(&state.db, 10).await?;
+    let entries = list_all_recent_entries(&state.db, 10, state.config.token_encryption_key.as_deref()).await?;
 
     let tmpl = state
         .jinja
@@ -57,7 +57,7 @@ pub async fn dashboard_page(
 
     // 2. Tenant İzolasyonu: Yalnızca bu kullanıcıya ait projeler ve girişler
     let raw_projects = list_projects_for_user(&state.db, &user.id).await?;
-    let user_entries = list_entries_for_user(&state.db, &user.id, 50).await?;
+    let user_entries = list_entries_for_user(&state.db, &user.id, 50, state.config.token_encryption_key.as_deref()).await?;
 
     // Webhook Secret'ları dashboard'da kullanıcıya açık göstermek için çöz.
     // Eğer proje eski default_webhook_secret kullanıyorsa projeye özel benzersiz whsec_ üretip DB'ye kaydet.

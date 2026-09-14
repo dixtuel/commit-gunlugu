@@ -8,7 +8,9 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::auth::password::hash_email;
-use crate::crypto::token::{decrypt_token, encrypt_token_for_storage};
+use crate::crypto::token::{
+    decrypt_token, encrypt_token_for_storage, pack_text_for_storage, unpack_text_from_storage,
+};
 use crate::error::AppError;
 
 pub type DbPool = Pool<Sqlite>;
@@ -17,6 +19,7 @@ pub async fn init_db(database_url: &str, token_encryption_key: Option<&str>) -> 
     let options = SqliteConnectOptions::from_str(database_url)
         .map_err(|e| AppError::Internal(format!("Geçersiz DATABASE_URL: {}", e)))?
         .create_if_missing(true)
+        .foreign_keys(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
         .busy_timeout(std::time::Duration::from_secs(5));
@@ -36,6 +39,11 @@ pub async fn init_db(database_url: &str, token_encryption_key: Option<&str>) -> 
     // Eski açık metin e-postaları güvenli şekilde şifreli ve hashli formata dönüştür (sıfır veri kaybı)
     if let Err(e) = migrate_encrypted_users(&pool, token_encryption_key).await {
         tracing::warn!("Eski kullanıcı e-postalarını şifreleme uyarısı: {}", e);
+    }
+
+    // Eski açık metin sürüm notu gövdelerini Zstandard (seviye 3, >= 512B) ve AES-256-GCM ile şeffaf dönüştür
+    if let Err(e) = migrate_compressed_encrypted_entries(&pool, token_encryption_key).await {
+        tracing::warn!("Eski sürüm notlarını sıkıştırma/şifreleme uyarısı: {}", e);
     }
 
     tracing::info!("SQLite veritabanı başlatıldı (WAL modu aktif, Auth ve Şifreleme tabloları hazır)");
@@ -60,6 +68,33 @@ pub async fn migrate_encrypted_users(pool: &DbPool, key_hex: Option<&str>) -> Re
             .bind(&enc_email)
             .bind(&e_hash)
             .bind(&u.id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+/// Henüz şifrelenmemiş veya sıkıştırılmamış eski açık metin sürüm notu gövdelerini
+/// Zstandard (seviye 3, >= 512B) ve AES-256-GCM ile şeffaf şekilde dönüştürür.
+pub async fn migrate_compressed_encrypted_entries(pool: &DbPool, key_hex: Option<&str>) -> Result<(), AppError> {
+    let Some(key_hex) = key_hex else {
+        return Ok(());
+    };
+
+    let entries: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, body FROM entries WHERE body NOT LIKE 'enc:%'"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    for (entry_id, raw_body) in entries {
+        let plain_body = unpack_text_from_storage(&raw_body, Some(key_hex));
+        let packed = pack_text_for_storage(&plain_body, Some(key_hex));
+
+        sqlx::query("UPDATE entries SET body = ? WHERE id = ?")
+            .bind(&packed)
+            .bind(&entry_id)
             .execute(pool)
             .await?;
     }
@@ -538,7 +573,13 @@ pub async fn delete_entry_by_title_or_tag(
 // GİRİŞLER (ENTRIES) VE WEBHOOK LOGLARI
 // ---------------------------------------------------------------------------
 
-pub async fn insert_entry(pool: &DbPool, entry: &Entry) -> Result<(), AppError> {
+pub async fn insert_entry(
+    pool: &DbPool,
+    entry: &Entry,
+    key_hex: Option<&str>,
+) -> Result<(), AppError> {
+    let stored_body = pack_text_for_storage(&entry.body, key_hex);
+
     sqlx::query(
         r#"
         INSERT INTO entries (
@@ -552,7 +593,7 @@ pub async fn insert_entry(pool: &DbPool, entry: &Entry) -> Result<(), AppError> 
     .bind(&entry.project_id)
     .bind(&entry.category)
     .bind(&entry.title)
-    .bind(&entry.body)
+    .bind(&stored_body)
     .bind(&entry.status)
     .bind(entry.ai_generated)
     .bind(&entry.source_commit_shas)
@@ -569,8 +610,9 @@ pub async fn list_entries_for_project(
     pool: &DbPool,
     project_id: &str,
     published_only: bool,
+    key_hex: Option<&str>,
 ) -> Result<Vec<Entry>, AppError> {
-    let entries = if published_only {
+    let mut entries = if published_only {
         sqlx::query_as::<_, Entry>(
             "SELECT * FROM entries WHERE project_id = ? AND status = 'PUBLISHED' ORDER BY published_at DESC, created_at DESC LIMIT 50",
         )
@@ -586,6 +628,10 @@ pub async fn list_entries_for_project(
         .await?
     };
 
+    for e in &mut entries {
+        e.body = unpack_text_from_storage(&e.body, key_hex);
+    }
+
     Ok(entries)
 }
 
@@ -593,8 +639,9 @@ pub async fn list_entries_for_user(
     pool: &DbPool,
     user_id: &str,
     limit: i64,
+    key_hex: Option<&str>,
 ) -> Result<Vec<Entry>, AppError> {
-    let entries = sqlx::query_as::<_, Entry>(
+    let mut entries = sqlx::query_as::<_, Entry>(
         r#"
         SELECT e.* FROM entries e
         INNER JOIN projects p ON p.id = e.project_id
@@ -608,16 +655,28 @@ pub async fn list_entries_for_user(
     .fetch_all(pool)
     .await?;
 
+    for e in &mut entries {
+        e.body = unpack_text_from_storage(&e.body, key_hex);
+    }
+
     Ok(entries)
 }
 
-pub async fn list_all_recent_entries(pool: &DbPool, limit: i64) -> Result<Vec<Entry>, AppError> {
-    let entries = sqlx::query_as::<_, Entry>(
+pub async fn list_all_recent_entries(
+    pool: &DbPool,
+    limit: i64,
+    key_hex: Option<&str>,
+) -> Result<Vec<Entry>, AppError> {
+    let mut entries = sqlx::query_as::<_, Entry>(
         "SELECT * FROM entries ORDER BY created_at DESC LIMIT ?",
     )
     .bind(limit)
     .fetch_all(pool)
     .await?;
+
+    for e in &mut entries {
+        e.body = unpack_text_from_storage(&e.body, key_hex);
+    }
 
     Ok(entries)
 }
@@ -805,8 +864,8 @@ mod tests {
             updated_at: Utc::now().to_rfc3339(),
         };
 
-        insert_entry(&pool, &entry1).await.unwrap();
-        insert_entry(&pool, &entry2).await.unwrap();
+        insert_entry(&pool, &entry1, None).await.unwrap();
+        insert_entry(&pool, &entry2, None).await.unwrap();
 
         // 1. Eski sha silindiğinde (force push / amend simülasyonu)
         let deleted = delete_entries_by_commit_shas(
@@ -821,7 +880,7 @@ mod tests {
         assert_eq!(deleted[0], "Eski Amend Edilen Özellik");
 
         // 2. Kalan entry kontrolü
-        let remaining = list_entries_for_project(&pool, project_id, false)
+        let remaining = list_entries_for_project(&pool, project_id, false, None)
             .await
             .unwrap();
         assert_eq!(remaining.len(), 1);
@@ -837,10 +896,77 @@ mod tests {
         .unwrap();
         assert_eq!(deleted_empty.len(), 0);
 
-        let remaining_after = list_entries_for_project(&pool, project_id, false)
+        let remaining_after = list_entries_for_project(&pool, project_id, false, None)
             .await
             .unwrap();
         assert_eq!(remaining_after.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_insert_and_list_entries_with_compression_and_encryption() {
+        let key = hex::encode([42u8; 32]);
+        let pool = init_db("sqlite::memory:", Some(&key)).await.unwrap();
+        let project_id = "test-proj-compression";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "test/compression".to_string(),
+            name: "Compression Test".to_string(),
+            slug: "compression-test".to_string(),
+            widget_key: "w_comp".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let long_body = "Sistem üzerinde yapılan bu sürüm ile veritabanı şifreleme ve Zstandard sıkıştırma mimarisi kuruldu. ".repeat(15);
+        assert!(long_body.len() > 1000);
+
+        let entry = Entry {
+            id: "entry-comp-1".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "Büyük Sıkıştırılmış Sürüm".to_string(),
+            body: long_body.clone(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 1,
+            source_commit_shas: "[]".to_string(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        // 1. Veriyi şifreli ve Zstd sıkıştırmalı kaydet
+        insert_entry(&pool, &entry, Some(&key)).await.unwrap();
+
+        // 2. Doğrudan SQLite'tan ham veriyi kontrol et: enc:zstd: ile başlamalı!
+        let (raw_db_body,): (String,) = sqlx::query_as(
+            "SELECT body FROM entries WHERE id = ?"
+        )
+        .bind(&entry.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert!(raw_db_body.starts_with("enc:zstd:"), "Ham veritabanı sütununda enc:zstd: öneki bulunmalıdır");
+        assert!(!raw_db_body.contains("Sistem üzerinde yapılan"), "Açık metin veritabanında görünmemelidir");
+
+        // 3. list_entries_for_project ile şeffaf okuma
+        let fetched = list_entries_for_project(&pool, project_id, true, Some(&key)).await.unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert_eq!(fetched[0].body, long_body, "Okunan veri eksiksiz ve hatasız decompress edilmiş olmalıdır");
     }
 }
 
