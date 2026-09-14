@@ -53,12 +53,36 @@ struct ModelProfile {
 
 fn known_profile(name: &str) -> ModelProfile {
     match name {
+        "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.6,
+            top_p: 0.95,
+            max_tokens: 1024,
+            // reasoning_budget=0: Sonsuz düşünce (reasoning) döngüsünü kapatıp anında editoryal JSON üretmesini sağlar.
+            extra: json!({ "reasoning_budget": 0 }),
+        },
+        "meta/muse-glimmer-30b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.95,
+            top_p: 1.0,
+            max_tokens: 1024,
+            extra: json!({
+                "reasoning_effort": "low",
+                "chat_template_kwargs": { "reasoning_strength": "low" }
+            }),
+        },
+        "poolside/laguna-xs-2.1" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.8,
+            top_p: 0.95,
+            max_tokens: 1024,
+            extra: json!({}),
+        },
         "deepseek-ai/deepseek-v4-flash-0731" => ModelProfile {
             name: name.to_string(),
             temperature: 1.0,
             top_p: 0.95,
             max_tokens: 2048,
-            // DeepSeek thinking'i devre dışı bırak: reasoning_effort="none" ve chat_template_kwargs.enable_thinking=false
             extra: json!({
                 "reasoning_effort": "none",
                 "chat_template_kwargs": { "enable_thinking": false }
@@ -69,18 +93,9 @@ fn known_profile(name: &str) -> ModelProfile {
             temperature: 0.5,
             top_p: 1.0,
             max_tokens: 2048,
-            // Gemma thinking'i devre dışı bırak: chat_template_kwargs.enable_thinking=false
             extra: json!({
                 "chat_template_kwargs": { "enable_thinking": false }
             }),
-        },
-        "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
-            name: name.to_string(),
-            temperature: 1.0,
-            top_p: 0.95,
-            max_tokens: 2048,
-            // reasoning_budget=-1: "Use -1 to disable budget enforcement" (docs.api.nvidia.com).
-            extra: json!({ "reasoning_budget": -1 }),
         },
         other => ModelProfile {
             name: other.to_string(),
@@ -111,13 +126,16 @@ struct Choice {
 #[derive(Deserialize)]
 struct Message {
     content: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    reasoning_content: Option<String>,
 }
 
 impl LlmFallbackEngine {
     pub fn new(config: Config) -> Self {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(30))
             .build()
             .unwrap_or_default();
 
@@ -259,16 +277,27 @@ fn merge_json(body: &mut Value, extra: &Value) {
     }
 }
 
+/// Modellerin metin içinde ürettiği düşünce/reasoning bloklarını (<think>...</think> vb.)
+/// akışa ve sürüm günlüğü kaydına karışmaması için temizler.
 fn strip_reasoning_blocks(raw: &str) -> String {
     let mut text = raw.to_string();
-    while let Some(start) = text.find("<think>") {
-        if let Some(end) = text[start..].find("</think>") {
-            let end_abs = start + end + "</think>".len();
-            text.replace_range(start..end_abs, "");
-        } else {
-            break;
+
+    for (start_tag, end_tag) in &[
+        ("<think>", "</think>"),
+        ("<thought>", "</thought>"),
+        ("[THINK]", "[/THINK]"),
+        ("<reasoning>", "</reasoning>"),
+    ] {
+        while let Some(start) = text.find(start_tag) {
+            if let Some(end) = text[start..].find(end_tag) {
+                let end_abs = start + end + end_tag.len();
+                text.replace_range(start..end_abs, "");
+            } else {
+                break;
+            }
         }
     }
+
     text.trim().to_string()
 }
 
@@ -325,4 +354,26 @@ fn parse_draft_json(raw: &str) -> Result<EntryDraft, String> {
         title: draft.title.chars().take(120).collect(),
         body: draft.body.chars().take(400).collect(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_draft_with_thinking_blocks() {
+        let raw = "<think>\nDüşünce süreci: burada yapılan analizler akışa gitmemeli.\n</think>\n{\n  \"category\": \"NEW\",\n  \"title\": \"Görsel Özelleştirme\",\n  \"body\": \"Yeni tema stilleri eklendi.\"\n}";
+        let parsed = parse_draft_json(raw).expect("Ayrıştırma başarılı olmalı");
+        assert_eq!(parsed.category, "NEW");
+        assert_eq!(parsed.title, "Görsel Özelleştirme");
+        assert_eq!(parsed.body, "Yeni tema stilleri eklendi.");
+    }
+
+    #[test]
+    fn test_parse_draft_clean_json() {
+        let raw = "{\n  \"category\": \"FIX\",\n  \"title\": \"Mobil Hata Giderimi\",\n  \"body\": \"Kritik bir görsel çökme sorunu düzeltildi.\"\n}";
+        let parsed = parse_draft_json(raw).expect("Ayrıştırma başarılı olmalı");
+        assert_eq!(parsed.category, "FIX");
+        assert_eq!(parsed.title, "Mobil Hata Giderimi");
+    }
 }
