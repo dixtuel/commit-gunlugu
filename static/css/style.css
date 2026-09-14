@@ -921,6 +921,56 @@ code {
   font-size: 1.6rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.changelog-title-link {
+  color: var(--text-main);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.changelog-title-link:hover {
+  color: var(--project-brand, var(--primary));
+}
+
+.changelog-repo-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  opacity: 0.4;
+  flex-shrink: 0;
+  transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.changelog-title-link:hover .changelog-repo-icon {
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+
+.changelog-logo-link,
+.changelog-dot-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
+}
+
+.changelog-logo-link:hover,
+.changelog-dot-link:hover {
+  transform: scale(1.06);
+  opacity: 0.85;
+}
+
+.btn-github-repo {
+  color: var(--text-muted);
+}
+
+.btn-github-repo:hover {
+  color: var(--text-main);
+  border-color: var(--border-hover);
 }
 
 .changelog-sub {
@@ -982,6 +1032,18 @@ code {
   font-size: 0.76rem;
   color: var(--text-subtle);
   font-family: var(--font-mono);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.timeline-author-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.timeline-author-link:hover .timeline-author {
+  color: var(--text-main);
+  text-decoration: underline;
 }
 
 .badge-sha {
@@ -992,6 +1054,19 @@ code {
   padding: 1px 6px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.badge-sha-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge-sha-link:hover .badge-sha {
+  color: var(--text-main);
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
 }
 
 .timeline-heading {

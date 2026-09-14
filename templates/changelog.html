@@ -27,16 +27,29 @@
       <div class="changelog-brand-wrap">
         <div class="changelog-brand-left">
           {% if project.brand_logo_url %}
-          <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
+          <a href="https://github.com/{{ project.github_repo_full_name | safe }}" target="_blank" rel="noopener noreferrer" class="changelog-logo-link" title="GitHub deposunu görüntüle ({{ project.github_repo_full_name }})">
+            <img src="{{ project.brand_logo_url }}" alt="{{ project.name }}" class="changelog-logo">
+          </a>
           {% else %}
-          <div class="project-dot-lg" style="background-color: {{ project.brand_color }}"></div>
+          <a href="https://github.com/{{ project.github_repo_full_name | safe }}" target="_blank" rel="noopener noreferrer" class="changelog-dot-link" title="GitHub deposunu görüntüle ({{ project.github_repo_full_name }})">
+            <div class="project-dot-lg" style="background-color: {{ project.brand_color }}"></div>
+          </a>
           {% endif %}
           <div>
-            <h1 class="changelog-title">{{ project.brand_name or project.name }}</h1>
+            <h1 class="changelog-title">
+              <a href="https://github.com/{{ project.github_repo_full_name | safe }}" target="_blank" rel="noopener noreferrer" class="changelog-title-link" title="GitHub deposuna git ({{ project.github_repo_full_name }})">
+                <span>{{ project.brand_name or project.name }}</span>
+                <svg class="changelog-repo-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </h1>
             <p class="changelog-sub">Sürüm güncellemeleri, iyileştirmeler ve hata düzeltmeleri</p>
           </div>
         </div>
         <div class="changelog-export-actions">
+          <a href="https://github.com/{{ project.github_repo_full_name | safe }}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-outline btn-github-repo" title="GitHub deposunu aç ({{ project.github_repo_full_name }})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+            <span>GitHub</span>
+          </a>
           <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="Markdown olarak indir">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             <span>Markdown</span>
@@ -65,10 +78,14 @@
             <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
             <time class="timeline-date">{{ (e.published_at or e.created_at)[:10] }}</time>
             {% if e.author_username %}
-            <span class="timeline-author">@{{ e.author_username }}</span>
+            <a href="https://github.com/{{ e.author_username }}" target="_blank" rel="noopener noreferrer" class="timeline-author-link" title="@{{ e.author_username }} GitHub profili">
+              <span class="timeline-author">@{{ e.author_username }}</span>
+            </a>
             {% endif %}
             {% if project.audience == "developer" and e.source_pr_number %}
-            <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
+            <a href="https://github.com/{{ project.github_repo_full_name }}/pull/{{ e.source_pr_number }}" target="_blank" rel="noopener noreferrer" class="badge-sha-link" title="PR #{{ e.source_pr_number }} detayları">
+              <span class="badge-sha">PR #{{ e.source_pr_number }}</span>
+            </a>
             {% endif %}
           </div>
           <h2 class="timeline-heading">{{ e.title }}</h2>
