@@ -144,8 +144,7 @@ impl LlmFallbackEngine {
 
     /// Çok aşamalı AI zinciri:
     /// 1. NVIDIA NIM modelleri (sırayla denenir)
-    /// 2. Mikoshi AI Gateway / OpenAI uyumlu uç nokta
-    /// 3. Deterministik kural motoru (Zero-failure)
+    /// 2. Deterministik kural motoru (Zero-failure)
     pub async fn summarize(
         &self,
         pr_title: Option<&str>,

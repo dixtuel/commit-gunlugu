@@ -24,7 +24,7 @@ Yazılım geliştiriciler kod üretir, ancak son kullanıcılar teknik git commi
 
 - ⚡ **Ultra Düşük Kaynak Tüketimi:** Node.js (~350MB) ve Python (~250MB) yerine Rust (Axum + Tokio + SQLite WAL) ile yalnızca **~15MB RAM** tüketir.
 - ⏱️ **Sub-Millisecond Webhook Yanıtı:** Webhook isteklerini <2ms sürede karşılayıp 200 OK döner; AI özetleme görevini arka plandaki asenkron Tokio worker kuyruğunda yürütür.
-- 🧠 **3 Kademeli AI Fallback Zinciri:** NVIDIA NIM &rarr; Mikoshi AI Gateway &rarr; Sıfır arıza garantili Deterministik Conventional Commits kural motoru.
+- 🧠 **2 Kademeli AI Fallback Zinciri:** NVIDIA NIM &rarr; Sıfır arıza garantili Deterministik Conventional Commits kural motoru.
 - 🛡️ **Tavizsiz Güvenlik & DoS Koruması:** Sabit zamanlı HMAC-SHA256 doğrulama, Leaky-Bucket IP hız kısıtlaması (`tower_governor`), SQL injection bağışıklığı.
 - 🔒 **KVKK & E-posta Maskeleme:** Ham webhook verilerindeki `author.email` ve kişisel e-postalar işleme kapısında ayıklanır; kamuya açık changelog'a asla sızdırılmaz.
 - 🗄️ **Kendi Kendini Onaran KVKK İmha Kütüğü & Retention Süpürücüsü:** Kullanıcı hesabını sildiğinde veritabanından kalıcı olarak silinir (`ON DELETE CASCADE`) ve silinme kaydı `data/erasure-ledger.jsonl` kütüğüne yazılır. Felaket kurtarma anında eski bir SQLite yedeğinden dönülse dahi sunucu açılışında ve saatlik periyodik arka plan döngüsünde dirilen "hayalet" hesaplar otomatik olarak süpürülür.
@@ -53,8 +53,7 @@ graph TD
         TaskQueue --> LLMChain[AI Fallback Zinciri]
         
         LLMChain --> Tier1[1. NVIDIA NIM - DeepSeek V4 Flash / Nemotron 3.5]
-        LLMChain -.->|Fallback| Tier2[2. Mikoshi AI Gateway / Local LLM]
-        LLMChain -.->|Fallback| Tier3[3. Deterministik Kural Motoru - Zero Failure]
+        LLMChain -.->|Fallback| Tier2[2. Deterministik Kural Motoru - Zero Failure]
     end
 
     subgraph "Veri ve Kalıcılık Katmanı"
