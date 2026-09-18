@@ -9,9 +9,87 @@ pub struct EntryDraft {
     pub body: String,
 }
 
+/// Conventional Commits öneklerini VE öneksiz serbest geliştirici mesajlarını
+/// dilbilimsel ve anlamsal olarak analiz ederek NEW, FIX veya IMPROVEMENT kategorisini tespit eder.
+pub fn detect_semantic_category(text: &str) -> String {
+    let lower = text.to_lowercase();
+
+    // 1. Standart Conventional Commit Önekleri (En Yüksek Doğrudan Öncelik)
+    if lower.starts_with("feat")
+        || lower.contains("feat(")
+        || lower.contains("feature:")
+        || lower.contains("feature(")
+    {
+        return "NEW".to_string();
+    }
+    if lower.starts_with("fix")
+        || lower.contains("fix(")
+        || lower.starts_with("hotfix")
+        || lower.contains("bugfix")
+        || lower.contains("patch:")
+    {
+        return "FIX".to_string();
+    }
+
+    // 2. Serbest / Öneksiz Metinler İçin Anlamsal Puanlama (Türkçe & İngilizce)
+    let mut fix_score = 0;
+    let mut new_score = 0;
+    let mut imp_score = 0;
+
+    // Hata giderme göstergeleri (Düzeltme, onarım, problem, çökme, kilitlenme)
+    let fix_keywords = [
+        "düzelt", "hata", "çözüldü", "çözüm", "giderildi", "sorun", "çökme", "crash",
+        "kilitlen", "donma", "bozuk", "yanlış", "taşma", "kaçak", "aksaklık", "onarıldı",
+        "bug", "fix", "resolve", "broken", "issue", "problem", "error", "exception",
+        "fail", "failure", "patch", "repair", "leak", "overflow", "freeze", "hang"
+    ];
+
+    // Yeni özellik göstergeleri (Ekleme, oluşturma, yeni yetenek/entegrasyon)
+    let new_keywords = [
+        "ekle", "eklendi", "oluştur", "yeni", "desteği", "entegrasyon", "entegre", "özellik",
+        "yetenek", "kazandır", "getirildi", "geldi", "tanıtıldı", "sunuldu", "sağlandı",
+        "add", "added", "create", "created", "new", "support", "integrate", "integration",
+        "feature", "implement", "introduce", "introduced", "allow", "enable"
+    ];
+
+    // İyileştirme & altyapı göstergeleri (Hızlandırma, optimizasyon, sadeleştirme)
+    let imp_keywords = [
+        "iyileştir", "hızlandır", "güncelle", "yenile", "sadeleştir", "optimize",
+        "temizle", "modernize", "performans", "kararlılık", "hafiflet", "improve",
+        "speed", "perf", "performance", "refactor", "cleanup", "upgrade", "bump",
+        "update", "streamline", "polish"
+    ];
+
+    for kw in &fix_keywords {
+        if lower.contains(kw) {
+            fix_score += 1;
+        }
+    }
+
+    for kw in &new_keywords {
+        if lower.contains(kw) {
+            new_score += 1;
+        }
+    }
+
+    for kw in &imp_keywords {
+        if lower.contains(kw) {
+            imp_score += 1;
+        }
+    }
+
+    if fix_score > 0 && fix_score >= new_score && fix_score >= imp_score {
+        "FIX".to_string()
+    } else if new_score > 0 && new_score >= imp_score {
+        "NEW".to_string()
+    } else {
+        "IMPROVEMENT".to_string()
+    }
+}
+
 /// Yapay zeka servislerine ulaşılamadığında veya API anahtarı girilmediğinde
-/// Conventional Commits kurallarını analiz ederek sıfır-hata garantisiyle
-/// tutarlı bir changelog taslağı üreten deterministik motor.
+/// Conventional Commits kurallarını ve serbest geliştirici mesajlarını derinlemesine analiz ederek
+/// sıfır-hata garantisiyle tutarlı bir changelog taslağı üreten deterministik motor.
 pub fn generate_deterministic_entry(
     pr_title: Option<&str>,
     pr_body: Option<&str>,
@@ -23,16 +101,19 @@ pub fn generate_deterministic_entry(
         .unwrap_or("Sistem ve kod tabanı güncellemeleri");
 
     let clean_primary = sanitize_text(primary_text);
-    let lower = clean_primary.to_lowercase();
 
-    // 1. Kategori tespiti
-    let category = if lower.starts_with("feat") || lower.contains("add ") || lower.contains("yeni ") {
-        "NEW".to_string()
-    } else if lower.starts_with("fix") || lower.contains("bug") || lower.contains("düzelt") || lower.contains("hata") {
-        "FIX".to_string()
-    } else {
-        "IMPROVEMENT".to_string()
-    };
+    // Kategori tespiti: Yalnızca ilk satırı değil, tüm girdi havuzunu (PR + commitler) anlamsal olarak analiz et
+    let mut combined_text = clean_primary.clone();
+    for m in commit_messages {
+        combined_text.push(' ');
+        combined_text.push_str(&sanitize_text(m));
+    }
+    if let Some(b) = pr_body {
+        combined_text.push(' ');
+        combined_text.push_str(&sanitize_text(b));
+    }
+
+    let category = detect_semantic_category(&combined_text);
 
     // 2. Başlık temizliği (Conventional Commits prefixlerini kaldır)
     let raw_title = clean_primary
@@ -258,5 +339,41 @@ mod tests {
         let entry = generate_raw_git_entry(&commits, &shas);
         assert_eq!(entry.category, "IMPROVEMENT");
         assert!(entry.body.contains("9e78222"));
+    }
+
+    #[test]
+    fn test_prefixless_semantic_categories() {
+        // Serbest / öneksiz hata düzeltme mesajları
+        assert_eq!(detect_semantic_category("sepette kupon kodu girince sayfa kilitleniyordu çözüldü"), "FIX");
+        assert_eq!(detect_semantic_category("mobilde buton taşması sorunu giderildi"), "FIX");
+        assert_eq!(detect_semantic_category("fixed memory leak on websocket connection crash"), "FIX");
+
+        // Serbest / öneksiz yeni özellik mesajları
+        assert_eq!(detect_semantic_category("kullanıcı şifre sıfırlama akışı ve sms desteği eklendi"), "NEW");
+        assert_eq!(detect_semantic_category("profile iki adımlı doğrulama (2fa) sekmesi geldi"), "NEW");
+        assert_eq!(detect_semantic_category("introduced support for webhook notifications"), "NEW");
+
+        // Serbest / öneksiz iyileştirme mesajları
+        assert_eq!(detect_semantic_category("sayfa açılışı hızlandırıldı ve kod tabanı modernize edildi"), "IMPROVEMENT");
+        assert_eq!(detect_semantic_category("veritabanı sorguları optimize edildi ve temizlendi"), "IMPROVEMENT");
+        assert_eq!(detect_semantic_category("refactor and polish user profile settings"), "IMPROVEMENT");
+    }
+
+    #[test]
+    fn test_prefixless_batch_commits_generation() {
+        // İlk commit jenerik olsa bile sonraki committeki hatayı veya özelliği yakalama
+        let commits = vec![
+            "küçük değişiklikler".to_string(),
+            "ödeme sırasındaki donma ve çökme hatası düzeltildi".to_string(),
+        ];
+        let entry = generate_deterministic_entry(None, None, &commits);
+        assert_eq!(entry.category, "FIX");
+
+        let feat_commits = vec![
+            "arayüz düzenlemeleri".to_string(),
+            "yeni csv dışa aktarma özelliği eklendi".to_string(),
+        ];
+        let feat_entry = generate_deterministic_entry(None, None, &feat_commits);
+        assert_eq!(feat_entry.category, "NEW");
     }
 }
