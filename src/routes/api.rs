@@ -341,6 +341,7 @@ pub struct CreateProjectRequest {
     pub parse_mode: Option<String>,
     pub audience: Option<String>,
     pub template_style: Option<String>,
+    pub language: Option<String>,
     pub is_private: Option<bool>,
     pub custom_github_token: Option<String>,
 }
@@ -393,6 +394,7 @@ pub async fn create_project_handler(
         parse_mode: payload.parse_mode.unwrap_or_else(|| "ai_editorial".to_string()),
         audience: payload.audience.unwrap_or_else(|| "end_user".to_string()),
         template_style: payload.template_style.unwrap_or_else(|| "standard".to_string()),
+        language: payload.language.unwrap_or_else(|| "auto".to_string()),
         is_private: if is_private { 1 } else { 0 },
         custom_github_token: custom_token,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -411,6 +413,7 @@ pub struct UpdateProjectSettingsRequest {
     pub parse_mode: String,
     pub audience: String,
     pub template_style: String,
+    pub language: Option<String>,
     pub is_private: Option<bool>,
     pub custom_github_token: Option<String>,
 }
@@ -437,6 +440,7 @@ pub async fn update_project_settings_handler(
 
     let name = payload.name.unwrap_or(existing.name);
     let brand_color = payload.brand_color.unwrap_or(existing.brand_color);
+    let language = payload.language.unwrap_or(existing.language);
 
     let is_private_val = payload
         .is_private
@@ -468,6 +472,7 @@ pub async fn update_project_settings_handler(
         &payload.parse_mode,
         &payload.audience,
         &payload.template_style,
+        &language,
         is_private_val,
         effective_custom_token,
     )
@@ -704,6 +709,7 @@ pub async fn sync_github_commits_handler(
 
             let draft = match state_clone.llm.summarize_for_project(
                 &project_clone.parse_mode,
+                Some(&project_clone.language),
                 None,
                 None,
                 &commit_messages,

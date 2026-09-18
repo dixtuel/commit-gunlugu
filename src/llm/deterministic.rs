@@ -91,14 +91,22 @@ pub fn detect_semantic_category(text: &str) -> String {
 /// Conventional Commits kurallarını ve serbest geliştirici mesajlarını derinlemesine analiz ederek
 /// sıfır-hata garantisiyle tutarlı bir changelog taslağı üreten deterministik motor.
 pub fn generate_deterministic_entry(
+    target_lang: &str,
     pr_title: Option<&str>,
     pr_body: Option<&str>,
     commit_messages: &[String],
 ) -> EntryDraft {
+    let is_en = target_lang == "en";
+    let default_title = if is_en {
+        "System and codebase updates"
+    } else {
+        "Sistem ve kod tabanı güncellemeleri"
+    };
+
     // PR başlığı varsa birincil kaynak odur; yoksa ilk anlamlı commit mesajı
     let primary_text = pr_title
         .or_else(|| commit_messages.first().map(|s| s.as_str()))
-        .unwrap_or("Sistem ve kod tabanı güncellemeleri");
+        .unwrap_or(default_title);
 
     let clean_primary = sanitize_text(primary_text);
 
@@ -122,7 +130,8 @@ pub fn generate_deterministic_entry(
         .unwrap_or(&clean_primary)
         .trim();
 
-    let title = clean_title(raw_title);
+    let fallback_title = if is_en { "System Improvement" } else { "Sistem İyileştirmesi" };
+    let title = clean_title(raw_title, fallback_title);
 
     // 3. Gövde (body) oluşturma
     let body = if let Some(body_text) = pr_body {
@@ -130,15 +139,26 @@ pub fn generate_deterministic_entry(
         let first_line = clean_b.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
         if first_line.len() > 10 {
             first_line.chars().take(280).collect::<String>()
+        } else if is_en {
+            format!("Completed {} developments and deployed updates.", title)
         } else {
             format!("{} kapsamında ilgili geliştirmeler tamamlandı ve yayına alındı.", title)
         }
     } else if commit_messages.len() > 1 {
         let count = commit_messages.len();
-        format!(
-            "Bu sürümde {} adet commit birleştirilerek kararlılık ve performans geliştirmeleri sağlandı.",
-            count
-        )
+        if is_en {
+            format!(
+                "Merged {} commits in this release with stability and performance enhancements.",
+                count
+            )
+        } else {
+            format!(
+                "Bu sürümde {} adet commit birleştirilerek kararlılık ve performans geliştirmeleri sağlandı.",
+                count
+            )
+        }
+    } else if is_en {
+        format!("Applied code changes and improvements for {}.", title)
     } else {
         format!("{} ile ilgili kod değişiklikleri ve iyileştirmeler uygulandı.", title)
     };
@@ -152,10 +172,15 @@ pub fn generate_deterministic_entry(
 
 /// Git-cliff ve Conventional Commits standardına uygun katı ayrıştırıcı
 pub fn generate_conventional_entry(
+    target_lang: &str,
     commit_messages: &[String],
 ) -> EntryDraft {
-    let raw = commit_messages.first().map(|s| s.as_str()).unwrap_or("chore: kod tabanı güncellemesi");
+    let is_en = target_lang == "en";
+    let default_commit = if is_en { "chore: codebase maintenance" } else { "chore: kod tabanı güncellemesi" };
+    let raw = commit_messages.first().map(|s| s.as_str()).unwrap_or(default_commit);
     let clean = sanitize_text(raw);
+
+    let fallback_title = if is_en { "System Improvement" } else { "Sistem İyileştirmesi" };
 
     // Conventional commits regex mantığı: type(scope)!: description
     let (category, formatted_title) = if let Some(colon_idx) = clean.find(':') {
@@ -170,25 +195,31 @@ pub fn generate_conventional_entry(
             "IMPROVEMENT"
         };
 
-        // Scope ayıkla: feat(api)! -> [Api]
+        // Scope ayıkla: feat(api)! -> (Api) Desc
         let title = if let (Some(start), Some(end)) = (prefix.find('('), prefix.find(')')) {
             if end > start + 1 {
                 let scope = &prefix[start + 1..end];
-                format!("({}) {}", clean_title(scope), clean_title(desc))
+                format!("({}) {}", clean_title(scope, "Scope"), clean_title(desc, fallback_title))
             } else {
-                clean_title(desc)
+                clean_title(desc, fallback_title)
             }
         } else {
-            clean_title(desc)
+            clean_title(desc, fallback_title)
         };
 
         (cat.to_string(), title)
     } else {
-        ("IMPROVEMENT".to_string(), clean_title(&clean))
+        ("IMPROVEMENT".to_string(), clean_title(&clean, fallback_title))
     };
 
     let body = if commit_messages.len() > 1 {
-        format!("Bu sürümde {} adet ilgili commit birleştirildi.", commit_messages.len())
+        if is_en {
+            format!("Merged {} related commits in this release.", commit_messages.len())
+        } else {
+            format!("Bu sürümde {} adet ilgili commit birleştirildi.", commit_messages.len())
+        }
+    } else if is_en {
+        format!("Completed {} developments.", formatted_title)
     } else {
         format!("{} geliştirmesi tamamlandı.", formatted_title)
     };
@@ -202,10 +233,12 @@ pub fn generate_conventional_entry(
 
 /// Release-drafter benzeri PR etiketleri ve başlığı odaklı ayrıştırıcı
 pub fn generate_pr_centric_entry(
+    target_lang: &str,
     pr_title: &str,
     pr_body: Option<&str>,
     labels: &[String],
 ) -> Option<EntryDraft> {
+    let is_en = target_lang == "en";
     // skip-changelog etiketi varsa atla
     if labels.iter().any(|l| l.to_lowercase() == "skip-changelog" || l.to_lowercase() == "ignore") {
         return None;
@@ -219,10 +252,17 @@ pub fn generate_pr_centric_entry(
         "IMPROVEMENT".to_string()
     };
 
-    let title = clean_title(pr_title);
+    let fallback_title = if is_en { "System Improvement" } else { "Sistem İyileştirmesi" };
+    let title = clean_title(pr_title, fallback_title);
     let body = pr_body
         .map(|b| sanitize_text(b).lines().take(3).collect::<Vec<_>>().join(" "))
-        .unwrap_or_else(|| format!("{} PR'ı başarıyla ana dala birleştirildi.", title));
+        .unwrap_or_else(|| {
+            if is_en {
+                format!("Pull request '{}' merged successfully.", title)
+            } else {
+                format!("{} PR'ı başarıyla ana dala birleştirildi.", title)
+            }
+        });
 
     Some(EntryDraft {
         category,
@@ -233,18 +273,28 @@ pub fn generate_pr_centric_entry(
 
 /// Auto-changelog benzeri doğrudan ham commit formatlayıcı
 pub fn generate_raw_git_entry(
+    target_lang: &str,
     commit_messages: &[String],
     commit_shas: &[String],
 ) -> EntryDraft {
-    let first_msg = commit_messages.first().cloned().unwrap_or_else(|| "Güncelleme".to_string());
-    let title = clean_title(&first_msg);
+    let is_en = target_lang == "en";
+    let default_title = if is_en { "Update" } else { "Güncelleme" };
+    let first_msg = commit_messages.first().cloned().unwrap_or_else(|| default_title.to_string());
+    let fallback_title = if is_en { "System Improvement" } else { "Sistem İyileştirmesi" };
+    let title = clean_title(&first_msg, fallback_title);
 
     let sha_summary = if !commit_shas.is_empty() {
         let short_shas: Vec<String> = commit_shas
             .iter()
             .map(|s| if s.len() >= 7 { s[..7].to_string() } else { s.clone() })
             .collect();
-        format!("Commitler: {}", short_shas.join(", "))
+        if is_en {
+            format!("Commits: {}", short_shas.join(", "))
+        } else {
+            format!("Commitler: {}", short_shas.join(", "))
+        }
+    } else if is_en {
+        "No commit details available.".to_string()
     } else {
         "Kaynak commit detayı bulunmuyor.".to_string()
     };
@@ -256,7 +306,7 @@ pub fn generate_raw_git_entry(
     }
 }
 
-fn clean_title(input: &str) -> String {
+fn clean_title(input: &str, fallback: &str) -> String {
     let mut s = input.trim();
 
     // Sondaki PR referanslarını temizle: (#12)
@@ -267,7 +317,7 @@ fn clean_title(input: &str) -> String {
     }
 
     if s.is_empty() {
-        return "Sistem İyileştirmesi".to_string();
+        return fallback.to_string();
     }
 
     // İlk harfi büyüt
@@ -285,7 +335,7 @@ mod tests {
     #[test]
     fn test_feat_commit() {
         let commits = vec!["feat(auth): add google and github oauth login buttons (#42)".to_string()];
-        let entry = generate_deterministic_entry(None, None, &commits);
+        let entry = generate_deterministic_entry("tr", None, None, &commits);
         assert_eq!(entry.category, "NEW");
         assert_eq!(entry.title, "Add google and github oauth login buttons");
     }
@@ -293,7 +343,7 @@ mod tests {
     #[test]
     fn test_fix_commit() {
         let commits = vec!["fix: resolve database timeout issue during peak hours".to_string()];
-        let entry = generate_deterministic_entry(None, None, &commits);
+        let entry = generate_deterministic_entry("tr", None, None, &commits);
         assert_eq!(entry.category, "FIX");
         assert_eq!(entry.title, "Resolve database timeout issue during peak hours");
     }
@@ -303,7 +353,7 @@ mod tests {
         let commits = vec!["chore: bump deps".to_string()];
         let pr_title = "feat: Yeni karanlık mod teması";
         let pr_body = "Kullanıcıların göz yorgunluğunu azaltan modern koyu tema eklendi.";
-        let entry = generate_deterministic_entry(Some(pr_title), Some(pr_body), &commits);
+        let entry = generate_deterministic_entry("tr", Some(pr_title), Some(pr_body), &commits);
         assert_eq!(entry.category, "NEW");
         assert_eq!(entry.title, "Yeni karanlık mod teması");
         assert!(entry.body.contains("Kullanıcıların"));
@@ -312,7 +362,7 @@ mod tests {
     #[test]
     fn test_conventional_mode() {
         let commits = vec!["feat(billing): add stripe and shopier webhook support".to_string()];
-        let entry = generate_conventional_entry(&commits);
+        let entry = generate_conventional_entry("tr", &commits);
         assert_eq!(entry.category, "NEW");
         assert!(entry.title.contains("(Billing)"));
         assert!(entry.title.contains("Add stripe and shopier"));
@@ -321,14 +371,14 @@ mod tests {
     #[test]
     fn test_pr_centric_mode() {
         let labels = vec!["enhancement".to_string(), "ui".to_string()];
-        let entry = generate_pr_centric_entry("Yeni filtreleme paneli", Some("Açıklama"), &labels);
+        let entry = generate_pr_centric_entry("tr", "Yeni filtreleme paneli", Some("Açıklama"), &labels);
         assert!(entry.is_some());
         let e = entry.unwrap();
         assert_eq!(e.category, "NEW");
 
         // skip-changelog testi
         let skip_labels = vec!["skip-changelog".to_string()];
-        let skipped = generate_pr_centric_entry("Dahili refactor", None, &skip_labels);
+        let skipped = generate_pr_centric_entry("tr", "Dahili refactor", None, &skip_labels);
         assert!(skipped.is_none());
     }
 
@@ -336,9 +386,24 @@ mod tests {
     fn test_raw_git_mode() {
         let commits = vec!["quick bugfix in payment gateway".to_string()];
         let shas = vec!["9e78222faeac31d0e7102".to_string()];
-        let entry = generate_raw_git_entry(&commits, &shas);
+        let entry = generate_raw_git_entry("tr", &commits, &shas);
         assert_eq!(entry.category, "IMPROVEMENT");
         assert!(entry.body.contains("9e78222"));
+    }
+
+    #[test]
+    fn test_english_generation() {
+        let commits = vec![
+            "fix(checkout): resolve freezing on mobile checkout".to_string(),
+            "optimize stripe payment hook".to_string(),
+        ];
+        let entry = generate_deterministic_entry("en", None, None, &commits);
+        assert_eq!(entry.category, "FIX");
+        assert!(entry.body.contains("Merged 2 commits in this release"));
+
+        let conv = generate_conventional_entry("en", &commits);
+        assert_eq!(conv.category, "FIX");
+        assert!(conv.body.contains("Merged 2 related commits in this release"));
     }
 
     #[test]
@@ -366,14 +431,14 @@ mod tests {
             "küçük değişiklikler".to_string(),
             "ödeme sırasındaki donma ve çökme hatası düzeltildi".to_string(),
         ];
-        let entry = generate_deterministic_entry(None, None, &commits);
+        let entry = generate_deterministic_entry("tr", None, None, &commits);
         assert_eq!(entry.category, "FIX");
 
         let feat_commits = vec![
             "arayüz düzenlemeleri".to_string(),
             "yeni csv dışa aktarma özelliği eklendi".to_string(),
         ];
-        let feat_entry = generate_deterministic_entry(None, None, &feat_commits);
+        let feat_entry = generate_deterministic_entry("tr", None, None, &feat_commits);
         assert_eq!(feat_entry.category, "NEW");
     }
 }

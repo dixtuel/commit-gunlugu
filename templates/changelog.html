@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="{% if project.language == 'en' %}en{% else %}tr{% endif %}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project.brand_name or project.name }} — Sürüm Notları</title>
+  <title>{{ project.brand_name or project.name }} — {% if project.language == 'en' %}Changelog & Release Notes{% else %}Sürüm Notları{% endif %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42,7 +42,7 @@
                 <svg class="changelog-repo-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               </a>
             </h1>
-            <p class="changelog-sub">Sürüm güncellemeleri, iyileştirmeler ve hata düzeltmeleri</p>
+            <p class="changelog-sub">{% if project.language == 'en' %}Release updates, improvements, and bug fixes{% else %}Sürüm güncellemeleri, iyileştirmeler ve hata düzeltmeleri{% endif %}</p>
           </div>
         </div>
         <div class="changelog-export-actions">
@@ -50,11 +50,11 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
             <span>GitHub</span>
           </a>
-          <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="Markdown olarak indir">
+          <a href="/c/{{ project.slug }}/export.md" class="btn-sm btn-outline" download title="{% if project.language == 'en' %}Download Markdown{% else %}Markdown olarak indir{% endif %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             <span>Markdown</span>
           </a>
-          <a href="/c/{{ project.slug }}/feed.xml" target="_blank" class="btn-sm btn-outline" title="RSS okuyucu akışı">
+          <a href="/c/{{ project.slug }}/feed.xml" target="_blank" class="btn-sm btn-outline" title="{% if project.language == 'en' %}RSS Feed{% else %}RSS okuyucu akışı{% endif %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
             <span>RSS 2.0</span>
           </a>
@@ -99,7 +99,7 @@
     </div>
     {% else %}
     <div class="empty-state">
-      <p>Bu proje için henüz yayınlanmış bir sürüm kaydı bulunmuyor.</p>
+      <p>{% if project.language == 'en' %}No release notes published for this project yet.{% else %}Bu proje için henüz yayınlanmış bir sürüm kaydı bulunmuyor.{% endif %}</p>
     </div>
     {% endif %}
   </main>
@@ -112,7 +112,7 @@
           <circle cx="6" cy="6" r="3"/>
           <path d="M18 15V9a6 6 0 0 0-6-6H6"/>
         </svg>
-        <span>Commit Günlüğü ile üretilmektedir</span>
+        <span>{% if project.language == 'en' %}Powered by Commit Günlüğü{% else %}Commit Günlüğü ile üretilmektedir{% endif %}</span>
       </a>
     </div>
   </footer>

@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::llm::deterministic::{generate_deterministic_entry, EntryDraft};
 use crate::sanitizer::sanitize_text;
 
-const SYSTEM_PROMPT: &str = r#"Sen kıdemli bir teknik ürün editörüsün ("Seyir Defteri" editörü). Görevin; ham Git commit mesajlarını ve Pull Request verilerini, yazılım ürününü kullanan son kullanıcılar için anlaşılır, editoryal ve değer odaklı bir sürüm günlüğü (changelog) kaydına dönüştürmektir.
+pub const SYSTEM_PROMPT_TR: &str = r#"Sen kıdemli bir teknik ürün editörüsün ("Seyir Defteri" editörü). Görevin; ham Git commit mesajlarını ve Pull Request verilerini, yazılım ürününü kullanan son kullanıcılar için anlaşılır, editoryal ve değer odaklı bir sürüm günlüğü (changelog) kaydına dönüştürmektir.
 
 ## Temel Kurallar ve Prensipler:
 1. DEĞER ODAKLI ÇEVİRİ:
@@ -63,6 +63,137 @@ JSON Çıktısı:
   "title": "Sayfa Açılış Hızı ve Altyapı Kararlılığı",
   "body": "Veritabanı sorguları ve önbellekleme mekanizması optimize edilerek sayfa açılış ve geçiş süreleri hızlandırıldı."
 }"#;
+
+pub const SYSTEM_PROMPT_EN: &str = r#"You are a senior technical product editor ("Ship Log" editor). Your mission is to transform raw Git commit messages and Pull Request data into a clear, editorial, and value-driven changelog entry for end users of the software product.
+
+## Core Rules and Principles:
+1. VALUE-DRIVEN TRANSLATION:
+   - Translate developer jargon (refactor, dependency bump, regex, query optimization, null check, etc.) into direct end-user benefits.
+   - Focus on "What improved or became easier for the user?" instead of "What was done under the hood?".
+
+2. EDITORIAL TONE ("LOGBOOK" PHILOSOPHY):
+   - Use clean, professional, calm, and concise English.
+   - ABSOLUTELY NO EMOJIS (no 🚀, 🐛, ⚡, ✨, 🎉, 🔧, etc.).
+   - Avoid exaggerated marketing fluff ("revolutionary", "game-changing") and corporate buzzwords; convey only the genuine impact of the changes.
+
+3. PRIVACY AND HYGIENE:
+   - NEVER include commit hashes (SHAs), internal file paths (src/...), branch names, developer names, or email addresses in the output text.
+
+4. CATEGORY IDENTIFICATION AND INTENT ANALYSIS (Only one of these 3 values):
+   - Developers MAY NOT have used Conventional Commits prefixes (feat, fix, chore). Deeply analyze free-form or conversational commit messages to identify the semantic intent:
+     * "NEW": A brand new screen, page, button, capability, integration, or feature that users couldn't experience before. (Examples: "added google oauth", "two-factor authentication", "export to pdf", "dark theme support", "search bar", "notification bell").
+     * "FIX": A problem that was previously broken, crashing, freezing, visually overflowing, malfunctioning, or miscalculating has been repaired. (Examples: "checkout freezing issue resolved", "fixed button overflow on mobile", "password reset email was not sending", "NullPointerException", "empty search results", "memory leak", "invoice amount miscalculation").
+     * "IMPROVEMENT": Making an existing system faster, cleaner, more secure, or more reliable, upgrading dependencies, design polish, or optimization. (Examples: "faster page load times", "refreshed icons", "optimized database queries", "streamlined mobile interface", "refactoring", "code cleanup").
+   - For multiple or mixed commits, choose the category that delivers the most significant and tangible value to the end user.
+
+## Output Format (JSON Only):
+Your response MUST be ONLY a valid and parseable JSON object. DO NOT wrap in markdown codeblocks (```json), add greetings, or include chain-of-thought/reasoning blocks.
+
+Example 1 (Free-form Bug Fix):
+Commit Messages:
+- coupon code input was freezing checkout page
+- fixed divide by zero error in discount calculation
+JSON Output:
+{
+  "category": "FIX",
+  "title": "Checkout Coupon Issue Resolved",
+  "body": "Fixed an issue where entering a discount coupon during checkout caused the page to freeze or calculate totals incorrectly."
+}
+
+Example 2 (Free-form New Feature):
+Commit Messages:
+- two-factor authentication (2FA) tab added to profile
+- authenticator qr code generation and backup codes
+JSON Output:
+{
+  "category": "NEW",
+  "title": "Two-Factor Authentication (2FA) Support",
+  "body": "Enhanced account security with authenticator-compatible two-factor authentication and backup recovery codes."
+}
+
+Example 3 (Free-form Improvement):
+Commit Messages:
+- refreshed database connection pool and cached queries
+- page transitions are significantly faster
+JSON Output:
+{
+  "category": "IMPROVEMENT",
+  "title": "Faster Page Load and System Stability",
+  "body": "Optimized database queries and caching mechanisms to significantly improve page loading and navigation speeds."
+}"#;
+
+/// Gelen metin içerisindeki Türkçe karakteristik karakter ve kelimeleri analiz ederek
+/// dilin Türkçe ("tr") mi yoksa İngilizce ("en") mi olduğunu yüksek doğrulukla tespit eder.
+pub fn detect_text_language(text: &str) -> &'static str {
+    let lower = text.to_lowercase();
+
+    // 1. Türkçe'ye özgü harfler (ç, ğ, ı, ö, ş, ü) - çok güçlü sinyal
+    let turkish_chars = ['ç', 'ğ', 'ı', 'ö', 'ş', 'ü'];
+    let mut tr_char_count = 0;
+    for c in lower.chars() {
+        if turkish_chars.contains(&c) {
+            tr_char_count += 1;
+        }
+    }
+    if tr_char_count >= 2 {
+        return "tr";
+    }
+
+    // 2. Türkçe yaygın fiil çekimleri, bağlaçlar ve kelimeler
+    let tr_words = [
+        "ve", "ile", "için", "düzeltildi", "eklendi", "güncellendi", "hata", "çözüldü",
+        "yapıldı", "sağlandı", "yeni", "artık", "sayfa", "kullanıcı", "buton", "ayar",
+        "sepet", "giriş", "düzelt", "sorun", "iyileştir", "kodu", "paneli", "destek",
+        "geliştirme", "kaldırıldı", "değişiklik", "ekle", "geldi", "düzeltme", "onarıldı"
+    ];
+
+    let en_words = [
+        "the", "and", "for", "with", "from", "fix", "fixed", "add", "added", "update",
+        "updated", "feat", "chore", "remove", "removed", "refactor", "support", "feature",
+        "release", "bump", "improve", "improved", "resolve", "resolved", "issue", "crash",
+        "bug", "button", "screen", "page", "user", "authentication", "login", "merge"
+    ];
+
+    let mut tr_score = tr_char_count * 2;
+    let mut en_score = 0;
+
+    for w in &tr_words {
+        if lower.contains(w) {
+            tr_score += 1;
+        }
+    }
+
+    for w in &en_words {
+        if lower.contains(w) {
+            en_score += 1;
+        }
+    }
+
+    if tr_score > en_score && tr_score > 0 {
+        "tr"
+    } else {
+        "en"
+    }
+}
+
+/// Projenin kayıtlı dil ayarı ("tr", "en", "auto") ile gelen commit metinlerini
+/// harmanlayarak modelin çalışacağı nihai hedef dili ("tr" veya "en") çözer.
+pub fn resolve_target_language(project_lang: Option<&str>, sample_text: &str) -> &'static str {
+    match project_lang.map(|s| s.trim().to_lowercase()).as_deref() {
+        Some("tr") => "tr",
+        Some("en") => "en",
+        _ => detect_text_language(sample_text),
+    }
+}
+
+/// Hedef dile uygun ("tr" veya "en") tam editoryal system prompt'unu döner.
+pub fn get_system_prompt(lang: &str) -> &'static str {
+    if lang == "en" {
+        SYSTEM_PROMPT_EN
+    } else {
+        SYSTEM_PROMPT_TR
+    }
+}
 
 #[derive(Clone)]
 struct ModelProfile {
@@ -165,10 +296,12 @@ impl LlmFallbackEngine {
     }
 
     /// Çok aşamalı AI zinciri:
-    /// 1. NVIDIA NIM modelleri (sırayla denenir)
-    /// 2. Deterministik kural motoru (Zero-failure)
+    /// 1. Dil tespiti ve hedef dile uygun system prompt seçimi (TR / EN)
+    /// 2. NVIDIA NIM modelleri (sırayla denenir)
+    /// 3. Deterministik kural motoru (Zero-failure)
     pub async fn summarize(
         &self,
+        project_lang: Option<&str>,
         pr_title: Option<&str>,
         pr_body: Option<&str>,
         commit_messages: &[String],
@@ -181,7 +314,26 @@ impl LlmFallbackEngine {
         let clean_pr_title = pr_title.map(sanitize_text);
         let clean_pr_body = pr_body.map(sanitize_text);
 
+        // Dil çözümlemesi (Proje ayarı "tr" | "en" ise doğrudan o dil; "auto" ise metin analizi)
+        let mut sample_for_lang = String::new();
+        if let Some(ref t) = clean_pr_title {
+            sample_for_lang.push_str(t);
+            sample_for_lang.push(' ');
+        }
+        if let Some(ref b) = clean_pr_body {
+            sample_for_lang.push_str(b);
+            sample_for_lang.push(' ');
+        }
+        for c in &clean_commits {
+            sample_for_lang.push_str(c);
+            sample_for_lang.push(' ');
+        }
+
+        let target_lang = resolve_target_language(project_lang, &sample_for_lang);
+        let system_prompt = get_system_prompt(target_lang);
+
         let user_prompt = build_user_prompt(
+            target_lang,
             clean_pr_title.as_deref(),
             clean_pr_body.as_deref(),
             &clean_commits,
@@ -190,9 +342,9 @@ impl LlmFallbackEngine {
         // 1. Aşama: NVIDIA NIM (DeepSeek V4, Nemotron 3.5, Gemma 4)
         if let Some(ref api_key) = self.config.nvidia_nim_api_key {
             for model in &self.config.nvidia_nim_models {
-                match self.call_nvidia_nim(api_key, model, &user_prompt).await {
+                match self.call_nvidia_nim(api_key, model, system_prompt, &user_prompt).await {
                     Ok(draft) => {
-                        tracing::info!("AI özeti başarıyla üretildi (NVIDIA NIM: {})", model);
+                        tracing::info!("AI özeti başarıyla üretildi (NVIDIA NIM: {}, dil: {})", model, target_lang);
                         return draft;
                     }
                     Err(e) => {
@@ -203,37 +355,55 @@ impl LlmFallbackEngine {
         }
 
         // 2. Aşama: Deterministik Kural Motoru (Zero-failure, çevrimdışı ve tam güvenli)
-        tracing::info!("AI devrede değil veya yanıt vermedi, deterministik kural motoru çalıştırılıyor");
+        tracing::info!("AI devrede değil veya yanıt vermedi, deterministik kural motoru çalıştırılıyor (dil: {})", target_lang);
         generate_deterministic_entry(
+            target_lang,
             clean_pr_title.as_deref(),
             clean_pr_body.as_deref(),
             &clean_commits,
         )
     }
 
-    /// Projenin seçtiği çalışma moduna (parse_mode) göre en uygun ayrıştırıcıyı ve motoru çalıştırır
+    /// Projenin seçtiği çalışma moduna (parse_mode) ve diline göre en uygun ayrıştırıcıyı ve motoru çalıştırır
     pub async fn summarize_for_project(
         &self,
         parse_mode: &str,
+        project_language: Option<&str>,
         pr_title: Option<&str>,
         pr_body: Option<&str>,
         commit_messages: &[String],
         commit_shas: &[String],
         labels: &[String],
     ) -> Option<EntryDraft> {
+        let mut sample_for_lang = String::new();
+        if let Some(t) = pr_title {
+            sample_for_lang.push_str(t);
+            sample_for_lang.push(' ');
+        }
+        if let Some(b) = pr_body {
+            sample_for_lang.push_str(b);
+            sample_for_lang.push(' ');
+        }
+        for c in commit_messages {
+            sample_for_lang.push_str(c);
+            sample_for_lang.push(' ');
+        }
+        let target_lang = resolve_target_language(project_language, &sample_for_lang);
+
         match parse_mode {
             "conventional" => {
-                Some(crate::llm::deterministic::generate_conventional_entry(commit_messages))
+                Some(crate::llm::deterministic::generate_conventional_entry(target_lang, commit_messages))
             }
             "pr_centric" => {
-                let title = pr_title.unwrap_or("Sürüm Geliştirmesi");
-                crate::llm::deterministic::generate_pr_centric_entry(title, pr_body, labels)
+                let default_title = if target_lang == "en" { "Release update" } else { "Sürüm Geliştirmesi" };
+                let title = pr_title.unwrap_or(default_title);
+                crate::llm::deterministic::generate_pr_centric_entry(target_lang, title, pr_body, labels)
             }
             "raw_git" => {
-                Some(crate::llm::deterministic::generate_raw_git_entry(commit_messages, commit_shas))
+                Some(crate::llm::deterministic::generate_raw_git_entry(target_lang, commit_messages, commit_shas))
             }
             _ => { // "ai_editorial"
-                Some(self.summarize(pr_title, pr_body, commit_messages).await)
+                Some(self.summarize(project_language, pr_title, pr_body, commit_messages).await)
             }
         }
     }
@@ -242,6 +412,7 @@ impl LlmFallbackEngine {
         &self,
         api_key: &str,
         model: &str,
+        system_prompt: &str,
         user_prompt: &str,
     ) -> Result<EntryDraft, String> {
         let url = "https://integrate.api.nvidia.com/v1/chat/completions";
@@ -250,7 +421,7 @@ impl LlmFallbackEngine {
         let mut body = json!({
             "model": profile.name,
             "messages": [
-                { "role": "system", "content": SYSTEM_PROMPT },
+                { "role": "system", "content": system_prompt },
                 { "role": "user", "content": user_prompt }
             ],
             "temperature": profile.temperature,
@@ -323,17 +494,27 @@ fn strip_reasoning_blocks(raw: &str) -> String {
 }
 
 fn build_user_prompt(
+    target_lang: &str,
     pr_title: Option<&str>,
     pr_body: Option<&str>,
     commits: &[String],
 ) -> String {
+    let is_en = target_lang == "en";
     let mut parts = Vec::new();
     if let Some(t) = pr_title {
-        parts.push(format!("PR Başlığı: {}", t));
+        if is_en {
+            parts.push(format!("PR Title: {}", t));
+        } else {
+            parts.push(format!("PR Başlığı: {}", t));
+        }
     }
     if let Some(b) = pr_body {
         let short_b = b.lines().take(5).collect::<Vec<_>>().join("\n");
-        parts.push(format!("PR Açıklaması:\n{}", short_b));
+        if is_en {
+            parts.push(format!("PR Description:\n{}", short_b));
+        } else {
+            parts.push(format!("PR Açıklaması:\n{}", short_b));
+        }
     }
 
     let commit_list = commits
@@ -342,7 +523,11 @@ fn build_user_prompt(
         .map(|c| format!("- {}", c))
         .collect::<Vec<_>>()
         .join("\n");
-    parts.push(format!("Commit Mesajları:\n{}", commit_list));
+    if is_en {
+        parts.push(format!("Commit Messages:\n{}", commit_list));
+    } else {
+        parts.push(format!("Commit Mesajları:\n{}", commit_list));
+    }
 
     parts.join("\n\n")
 }
@@ -380,6 +565,22 @@ fn parse_draft_json(raw: &str) -> Result<EntryDraft, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_language_detection() {
+        assert_eq!(detect_text_language("sepet donma problemi çözüldü"), "tr");
+        assert_eq!(detect_text_language("kullanıcı profiline iki adımlı doğrulama eklendi"), "tr");
+        assert_eq!(detect_text_language("fix divide by zero error in checkout"), "en");
+        assert_eq!(detect_text_language("add dark theme support and navbar icons"), "en");
+    }
+
+    #[test]
+    fn test_resolve_target_language() {
+        assert_eq!(resolve_target_language(Some("en"), "sepet hatası düzeltildi"), "en");
+        assert_eq!(resolve_target_language(Some("tr"), "fixed checkout bug"), "tr");
+        assert_eq!(resolve_target_language(Some("auto"), "fixed checkout bug"), "en");
+        assert_eq!(resolve_target_language(Some("auto"), "sepet hatası giderildi"), "tr");
+    }
 
     #[test]
     fn test_parse_draft_with_thinking_blocks() {

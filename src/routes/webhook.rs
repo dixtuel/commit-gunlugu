@@ -123,6 +123,7 @@ pub async fn handle_github_webhook(
                 parse_mode: "ai_editorial".to_string(),
                 audience: "end_user".to_string(),
                 template_style: "standard".to_string(),
+                language: "auto".to_string(),
                 is_private: 0,
                 custom_github_token: None,
                 created_at: chrono::Utc::now().to_rfc3339(),
@@ -269,6 +270,7 @@ async fn process_event_background(
                     parse_mode: "ai_editorial".to_string(),
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
+                    language: "auto".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
@@ -363,9 +365,10 @@ async fn process_event_background(
                 }
             }
 
-            // Proje moduna göre ayrıştırma motorunu çalıştır
+            // Proje moduna ve diline göre ayrıştırma motorunu çalıştır
             let draft = match state.llm.summarize_for_project(
                 &project.parse_mode,
+                Some(&project.language),
                 None,
                 None,
                 &commit_messages,
@@ -442,6 +445,7 @@ async fn process_event_background(
                     parse_mode: "ai_editorial".to_string(),
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
+                    language: "auto".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
@@ -451,6 +455,7 @@ async fn process_event_background(
 
             let draft = match state.llm.summarize_for_project(
                 &project.parse_mode,
+                Some(&project.language),
                 pr_title,
                 pr_body,
                 &[],
@@ -513,6 +518,7 @@ async fn process_event_background(
                     parse_mode: "ai_editorial".to_string(),
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
+                    language: "auto".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
@@ -525,6 +531,7 @@ async fn process_event_background(
 
             let draft = match state.llm.summarize_for_project(
                 &project.parse_mode,
+                Some(&project.language),
                 None,
                 Some(body),
                 &commit_messages,
@@ -671,6 +678,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -739,6 +747,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -806,6 +815,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),

@@ -313,6 +313,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),

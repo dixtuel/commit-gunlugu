@@ -126,6 +126,11 @@
             <span class="mode-badge" title="Hedef Kitle">
               {% if p.audience == "developer" %}Geliştirici{% else %}Son Kullanıcı{% endif %}
             </span>
+            <span class="mode-badge" title="Changelog Dili">
+              {% if p.language == "tr" %}TR
+              {% elif p.language == "en" %}EN
+              {% else %}Oto Dil{% endif %}
+            </span>
             {% if p.is_private == 1 %}
             <span class="mode-badge visibility-badge visibility-private" title="Gizli Depo (Kişisel Token Gerekli)">[private]</span>
             {% else %}
@@ -144,7 +149,7 @@
 
           <div class="side-project-controls">
             <button class="btn-control-sync" onclick="syncProjectGithub('{{ p.id }}', this)">GitHub'dan Çek</button>
-            <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}', {{ p.is_private }})">Ayarlar</button>
+            <button class="btn-control-edit" onclick="openEditProjectModal('{{ p.id }}', '{{ p.name }}', '{{ p.brand_color }}', '{{ p.parse_mode }}', '{{ p.audience }}', {{ p.is_private }}, '{{ p.language }}')">Ayarlar</button>
             <button class="btn-control-delete" onclick="openDeleteProjectModal('{{ p.id }}', '{{ p.name }}')">Repoyu Sil</button>
           </div>
         </div>
@@ -363,6 +368,14 @@
         </select>
       </div>
       <div class="form-group">
+        <label for="language">Changelog Dili</label>
+        <select id="language" name="language" class="input-select">
+          <option value="auto" selected>Otomatik Tespit (Commit / PR içeriğine göre TR veya EN)</option>
+          <option value="tr">Türkçe (Her zaman Türkçe prompt ve çıktı)</option>
+          <option value="en">English (Always English prompt and output)</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label for="brand_color">Marka Vurgu Rengi</label>
         <input type="color" id="brand_color" name="brand_color" value="#5b8a7a" class="input-color">
       </div>
@@ -416,6 +429,14 @@
         <select id="edit_audience" class="input-select">
           <option value="end_user">Son Kullanıcı (Sade, kod jargonsuz anlatım)</option>
           <option value="developer">Geliştirici (Commit SHA ve PR referanslı teknik görünüm)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit_language">Changelog Dili</label>
+        <select id="edit_language" class="input-select">
+          <option value="auto">Otomatik Tespit (Commit / PR içeriğine göre TR veya EN)</option>
+          <option value="tr">Türkçe (Her zaman Türkçe prompt ve çıktı)</option>
+          <option value="en">English (Always English prompt and output)</option>
         </select>
       </div>
       <div class="form-group">

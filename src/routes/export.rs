@@ -27,29 +27,47 @@ pub async fn export_markdown_handler(
     )
     .await?;
 
+    let is_en = project.language == "en";
     let mut md = String::new();
-    md.push_str(&format!("# {} — Sürüm Günlüğü (Changelog)\n\n", project.name));
-    md.push_str(&format!("> Otomatik olarak [Commit Günlüğü]({}/c/{}) ile üretilmiştir.\n\n", state.config.app_url.trim_end_matches('/'), project.slug));
+    if is_en {
+        md.push_str(&format!("# {} — Changelog\n\n", project.name));
+        md.push_str(&format!("> Automatically generated with [Commit Günlüğü]({}/c/{}).\n\n", state.config.app_url.trim_end_matches('/'), project.slug));
+    } else {
+        md.push_str(&format!("# {} — Sürüm Günlüğü (Changelog)\n\n", project.name));
+        md.push_str(&format!("> Otomatik olarak [Commit Günlüğü]({}/c/{}) ile üretilmiştir.\n\n", state.config.app_url.trim_end_matches('/'), project.slug));
+    }
 
     if entries.is_empty() {
-        md.push_str("*Henüz yayınlanmış bir sürüm notu bulunmuyor.*\n");
+        if is_en {
+            md.push_str("*No published release notes yet.*\n");
+        } else {
+            md.push_str("*Henüz yayınlanmış bir sürüm notu bulunmuyor.*\n");
+        }
     } else {
         for entry in entries {
             let date = entry.published_at.as_deref().unwrap_or(&entry.created_at);
             let short_date = if date.len() >= 10 { &date[..10] } else { date };
 
-            let badge = match entry.category.as_str() {
-                "NEW" => "**[YENİ]**",
-                "FIX" => "**[DÜZELTME]**",
-                _ => "**[İYİLEŞTİRME]**",
+            let badge = match (entry.category.as_str(), is_en) {
+                ("NEW", true) => "**[NEW]**",
+                ("NEW", false) => "**[YENİ]**",
+                ("FIX", true) => "**[FIX]**",
+                ("FIX", false) => "**[DÜZELTME]**",
+                (_, true) => "**[IMPROVEMENT]**",
+                (_, false) => "**[İYİLEŞTİRME]**",
             };
 
             md.push_str(&format!("### {} {}\n", badge, entry.title));
-            md.push_str(&format!("*Tarih: {}*", short_date));
+            if is_en {
+                md.push_str(&format!("*Date: {}*", short_date));
+            } else {
+                md.push_str(&format!("*Tarih: {}*", short_date));
+            }
 
             if project.audience == "developer" {
                 if let Some(author) = entry.author_username {
-                    md.push_str(&format!(" &bull; *Yazar: @{}*", author));
+                    let author_label = if is_en { "Author:" } else { "Yazar:" };
+                    md.push_str(&format!(" &bull; *{} @{}*", author_label, author));
                 }
                 if let Some(pr) = entry.source_pr_number {
                     md.push_str(&format!(" &bull; *PR: #{}\n*", pr));
@@ -92,15 +110,23 @@ pub async fn export_rss_handler(
     )
     .await?;
     let project_url = format!("{}/c/{}", state.config.app_url.trim_end_matches('/'), project.slug);
+    let is_en = project.language == "en";
 
     let mut rss = String::new();
     rss.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     rss.push_str("<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n");
     rss.push_str("  <channel>\n");
-    rss.push_str(&format!("    <title>{} — Sürüm Günlüğü</title>\n", escape_xml(&project.name)));
-    rss.push_str(&format!("    <link>{}</link>\n", escape_xml(&project_url)));
-    rss.push_str(&format!("    <description>{} için son sürüm notları ve değişiklikler.</description>\n", escape_xml(&project.name)));
-    rss.push_str("    <language>tr</language>\n");
+    if is_en {
+        rss.push_str(&format!("    <title>{} — Changelog</title>\n", escape_xml(&project.name)));
+        rss.push_str(&format!("    <link>{}</link>\n", escape_xml(&project_url)));
+        rss.push_str(&format!("    <description>Latest release notes and updates for {}.</description>\n", escape_xml(&project.name)));
+        rss.push_str("    <language>en</language>\n");
+    } else {
+        rss.push_str(&format!("    <title>{} — Sürüm Günlüğü</title>\n", escape_xml(&project.name)));
+        rss.push_str(&format!("    <link>{}</link>\n", escape_xml(&project_url)));
+        rss.push_str(&format!("    <description>{} için son sürüm notları ve değişiklikler.</description>\n", escape_xml(&project.name)));
+        rss.push_str("    <language>tr</language>\n");
+    }
     rss.push_str(&format!("    <atom:link href=\"{}/feed.xml\" rel=\"self\" type=\"application/rss+xml\" />\n", escape_xml(&project_url)));
 
     for entry in entries {

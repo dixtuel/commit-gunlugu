@@ -275,6 +275,7 @@ async function submitNewProject(e) {
   const color = document.getElementById("brand_color").value;
   const parseMode = document.getElementById("parse_mode") ? document.getElementById("parse_mode").value : "ai_editorial";
   const audience = document.getElementById("audience") ? document.getElementById("audience").value : "end_user";
+  const language = document.getElementById("language") ? document.getElementById("language").value : "auto";
   const isPrivate = document.getElementById("is_private") ? document.getElementById("is_private").checked : false;
   const customTokenInput = document.getElementById("custom_github_token");
   const customToken = customTokenInput ? customTokenInput.value.trim() : "";
@@ -294,6 +295,7 @@ async function submitNewProject(e) {
         brand_color: color,
         parse_mode: parseMode,
         audience: audience,
+        language: language,
         is_private: isPrivate,
         custom_github_token: customToken || null
       })
@@ -310,12 +312,13 @@ async function submitNewProject(e) {
   }
 }
 
-function openEditProjectModal(id, name, color, mode, audience, isPrivate) {
+function openEditProjectModal(id, name, color, mode, audience, isPrivate, language) {
   currentEditingProjectId = id;
   const nameInput = document.getElementById("edit_proj_name");
   const colorInput = document.getElementById("edit_brand_color");
   const modeSelect = document.getElementById("edit_parse_mode");
   const audienceSelect = document.getElementById("edit_audience");
+  const langSelect = document.getElementById("edit_language");
   const isPrivateCheckbox = document.getElementById("edit_is_private");
   const tokenInput = document.getElementById("edit_custom_github_token");
 
@@ -323,6 +326,7 @@ function openEditProjectModal(id, name, color, mode, audience, isPrivate) {
   if (colorInput) colorInput.value = color || "#2563eb";
   if (modeSelect) modeSelect.value = mode || "ai_editorial";
   if (audienceSelect) audienceSelect.value = audience || "end_user";
+  if (langSelect) langSelect.value = language || "auto";
   if (isPrivateCheckbox) isPrivateCheckbox.checked = (isPrivate === 1);
   if (tokenInput) tokenInput.value = "";
 
@@ -338,6 +342,7 @@ async function submitEditProject(e) {
   const color = document.getElementById("edit_brand_color").value;
   const parseMode = document.getElementById("edit_parse_mode").value;
   const audience = document.getElementById("edit_audience").value;
+  const language = document.getElementById("edit_language") ? document.getElementById("edit_language").value : "auto";
   const isPrivate = document.getElementById("edit_is_private") ? document.getElementById("edit_is_private").checked : false;
   const tokenInput = document.getElementById("edit_custom_github_token");
   const customToken = tokenInput ? tokenInput.value.trim() : "";
@@ -348,6 +353,7 @@ async function submitEditProject(e) {
       brand_color: color,
       parse_mode: parseMode,
       audience: audience,
+      language: language,
       template_style: "standard",
       is_private: isPrivate
     };

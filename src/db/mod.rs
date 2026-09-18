@@ -344,8 +344,8 @@ pub async fn upsert_project(
 ) -> Result<(), AppError> {
     sqlx::query(
         r#"
-        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, is_private, custom_github_token, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, language, is_private, custom_github_token, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(github_repo_full_name) DO UPDATE SET
             user_id = COALESCE(excluded.user_id, projects.user_id),
             name = excluded.name,
@@ -356,6 +356,7 @@ pub async fn upsert_project(
             parse_mode = excluded.parse_mode,
             audience = excluded.audience,
             template_style = excluded.template_style,
+            language = excluded.language,
             is_private = excluded.is_private,
             custom_github_token = COALESCE(excluded.custom_github_token, projects.custom_github_token),
             updated_at = datetime('now')
@@ -374,6 +375,7 @@ pub async fn upsert_project(
     .bind(&project.parse_mode)
     .bind(&project.audience)
     .bind(&project.template_style)
+    .bind(&project.language)
     .bind(project.is_private)
     .bind(&project.custom_github_token)
     .execute(pool)
@@ -404,6 +406,7 @@ pub async fn update_project_full_settings(
     parse_mode: &str,
     audience: &str,
     template_style: &str,
+    language: &str,
     is_private: i64,
     custom_github_token: Option<&str>,
 ) -> Result<bool, AppError> {
@@ -411,7 +414,7 @@ pub async fn update_project_full_settings(
         sqlx::query(
             r#"
             UPDATE projects
-            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, is_private = ?, custom_github_token = ?, updated_at = datetime('now')
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, is_private = ?, custom_github_token = ?, updated_at = datetime('now')
             WHERE id = ? AND user_id = ?
             "#
         )
@@ -420,6 +423,7 @@ pub async fn update_project_full_settings(
         .bind(parse_mode)
         .bind(audience)
         .bind(template_style)
+        .bind(language)
         .bind(is_private)
         .bind(token)
         .bind(project_id)
@@ -430,7 +434,7 @@ pub async fn update_project_full_settings(
         sqlx::query(
             r#"
             UPDATE projects
-            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, is_private = ?, updated_at = datetime('now')
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, is_private = ?, updated_at = datetime('now')
             WHERE id = ? AND user_id = ?
             "#
         )
@@ -439,6 +443,7 @@ pub async fn update_project_full_settings(
         .bind(parse_mode)
         .bind(audience)
         .bind(template_style)
+        .bind(language)
         .bind(is_private)
         .bind(project_id)
         .bind(user_id)
@@ -825,6 +830,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),
@@ -922,6 +928,7 @@ mod tests {
             parse_mode: "ai_editorial".to_string(),
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
+            language: "auto".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),
