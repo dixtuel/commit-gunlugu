@@ -78,8 +78,9 @@
             <span class="category-pill pill-{{ e.category | lower }}">{{ e.category }}</span>
             <time class="timeline-date">{{ (e.published_at or e.created_at)[:10] }}</time>
             {% if e.author_username %}
-            <a href="https://github.com/{{ e.author_username }}" target="_blank" rel="noopener noreferrer" class="timeline-author-link" title="@{{ e.author_username }} GitHub profili">
-              <span class="timeline-author">@{{ e.author_username }}</span>
+            {% set clean_author = e.author_username | replace("@", "") %}
+            <a href="https://github.com/{{ clean_author }}" target="_blank" rel="noopener noreferrer" class="timeline-author-link" title="@{{ clean_author }} GitHub profili">
+              <span class="timeline-author">@{{ clean_author }}</span>
             </a>
             {% endif %}
             {% if project.audience == "developer" and e.source_pr_number %}
