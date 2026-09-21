@@ -58,7 +58,7 @@ impl Config {
             .filter(|k| !k.trim().is_empty());
 
         let nvidia_nim_models = env::var("NVIDIA_NIM_MODELS")
-            .unwrap_or_else(|_| "nvidia/nemotron-3.5-lightning-30b-a3b,meta/muse-glimmer-30b,poolside/laguna-xs-2.1,deepseek-ai/deepseek-v4-flash-0731,google/gemma-4-31b-it".to_string())
+            .unwrap_or_else(|_| "nvidia/nemotron-3.5-lightning-30b-a3b,google/gemma-4-31b-it,meta/muse-glimmer-30b,openai/gpt-oss-20b,poolside/laguna-xs-2.1,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning".to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())

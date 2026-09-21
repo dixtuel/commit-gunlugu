@@ -224,6 +224,13 @@ fn known_profile(name: &str) -> ModelProfile {
                 "chat_template_kwargs": { "reasoning_strength": "low" }
             }),
         },
+        "openai/gpt-oss-20b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.7,
+            top_p: 1.0,
+            max_tokens: 1024,
+            extra: json!({}),
+        },
         "poolside/laguna-xs-2.1" => ModelProfile {
             name: name.to_string(),
             temperature: 0.8,
@@ -231,15 +238,12 @@ fn known_profile(name: &str) -> ModelProfile {
             max_tokens: 1024,
             extra: json!({}),
         },
-        "deepseek-ai/deepseek-v4-flash-0731" => ModelProfile {
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning" => ModelProfile {
             name: name.to_string(),
-            temperature: 1.0,
+            temperature: 0.6,
             top_p: 0.95,
-            max_tokens: 2048,
-            extra: json!({
-                "reasoning_effort": "none",
-                "chat_template_kwargs": { "enable_thinking": false }
-            }),
+            max_tokens: 65536,
+            extra: json!({ "reasoning_budget": 16384 }),
         },
         "google/gemma-4-31b-it" => ModelProfile {
             name: name.to_string(),
