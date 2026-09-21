@@ -343,7 +343,7 @@ impl LlmFallbackEngine {
             &clean_commits,
         );
 
-        // 1. Aşama: NVIDIA NIM (DeepSeek V4, Nemotron 3.5, Gemma 4)
+        // 1. Aşama: NVIDIA NIM (NVIDIA_NIM_MODELS env sırasına göre)
         if let Some(ref api_key) = self.config.nvidia_nim_api_key {
             for model in &self.config.nvidia_nim_models {
                 match self.call_nvidia_nim(api_key, model, system_prompt, &user_prompt).await {

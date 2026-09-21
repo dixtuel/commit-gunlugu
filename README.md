@@ -52,7 +52,7 @@ graph TD
         PrivacySanitizer --> TaskQueue[Tokio Async Task Queue]
         TaskQueue --> LLMChain[AI Fallback Zinciri]
         
-        LLMChain --> Tier1[1. NVIDIA NIM - DeepSeek V4 Flash / Nemotron 3.5]
+        LLMChain --> Tier1[1. NVIDIA NIM - configured ordered model fallback]
         LLMChain -.->|Fallback| Tier2[2. Deterministik Kural Motoru - Zero Failure]
     end
 
