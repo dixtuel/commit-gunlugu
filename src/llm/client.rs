@@ -498,8 +498,16 @@ impl LlmFallbackEngine {
                 .send()
                 .await;
             match result {
+                Ok(response) if [429, 503].contains(&response.status().as_u16()) => {
+                    tracing::warn!(
+                        model = %model,
+                        status = %response.status(),
+                        "NVIDIA NIM kapasite/rate-limit hatası; aynı model beklenmeden fallback sürüyor"
+                    );
+                    return Err(format!("NVIDIA NIM {} döndü", response.status()));
+                }
                 Ok(response)
-                    if attempt == 0 && [502, 503, 504].contains(&response.status().as_u16()) =>
+                    if attempt == 0 && [502, 504].contains(&response.status().as_u16()) =>
                 {
                     tracing::warn!(
                         model = %model,
