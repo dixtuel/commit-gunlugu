@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::llm::deterministic::{generate_deterministic_entry, EntryDraft};
@@ -199,26 +199,31 @@ pub fn get_system_prompt(lang: &str) -> &'static str {
 struct ModelProfile {
     name: String,
     temperature: f32,
-    top_p: f32,
+    top_p: Option<f32>,
     max_tokens: u32,
+    timeout_ms: u64,
     extra: Value,
 }
+
+const NIM_CHAIN_TIMEOUT_MS: u64 = 45_000;
 
 fn known_profile(name: &str) -> ModelProfile {
     match name {
         "nvidia/nemotron-3.5-lightning-30b-a3b" => ModelProfile {
             name: name.to_string(),
             temperature: 0.6,
-            top_p: 0.95,
+            top_p: Some(0.95),
             max_tokens: 1024,
+            timeout_ms: 30_000,
             // reasoning_budget=0: Sonsuz düşünce (reasoning) döngüsünü kapatıp anında editoryal JSON üretmesini sağlar.
             extra: json!({ "reasoning_budget": 0 }),
         },
         "meta/muse-glimmer-30b" => ModelProfile {
             name: name.to_string(),
             temperature: 0.95,
-            top_p: 1.0,
+            top_p: Some(1.0),
             max_tokens: 1024,
+            timeout_ms: 30_000,
             extra: json!({
                 "reasoning_effort": "low",
                 "chat_template_kwargs": { "reasoning_strength": "low" }
@@ -227,38 +232,62 @@ fn known_profile(name: &str) -> ModelProfile {
         "openai/gpt-oss-20b" => ModelProfile {
             name: name.to_string(),
             temperature: 0.7,
-            top_p: 1.0,
+            top_p: Some(1.0),
             max_tokens: 1024,
+            timeout_ms: 30_000,
             extra: json!({}),
         },
         "poolside/laguna-xs-2.1" => ModelProfile {
             name: name.to_string(),
             temperature: 0.8,
-            top_p: 0.95,
+            top_p: Some(0.95),
             max_tokens: 1024,
+            timeout_ms: 30_000,
             extra: json!({}),
         },
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning" => ModelProfile {
             name: name.to_string(),
             temperature: 0.6,
-            top_p: 0.95,
+            top_p: Some(0.95),
             max_tokens: 65536,
+            timeout_ms: 30_000,
             extra: json!({ "reasoning_budget": 16384 }),
         },
         "google/gemma-4-31b-it" => ModelProfile {
             name: name.to_string(),
             temperature: 0.5,
-            top_p: 1.0,
+            top_p: Some(1.0),
             max_tokens: 2048,
+            timeout_ms: 30_000,
             extra: json!({
                 "chat_template_kwargs": { "enable_thinking": false }
             }),
         },
+        "z-ai/glm-5.3" => ModelProfile {
+            name: name.to_string(),
+            temperature: 0.5,
+            top_p: None,
+            max_tokens: 2048,
+            timeout_ms: 12_000,
+            extra: json!({
+                "reasoning_effort": "low",
+                "chat_template_kwargs": { "clear_thinking": true }
+            }),
+        },
+        "nvidia/nemotron-3-super-120b-a12b" => ModelProfile {
+            name: name.to_string(),
+            temperature: 1.0,
+            top_p: Some(0.95),
+            max_tokens: 3072,
+            timeout_ms: 12_000,
+            extra: json!({ "reasoning_effort": "low" }),
+        },
         other => ModelProfile {
             name: other.to_string(),
             temperature: 0.7,
-            top_p: 1.0,
+            top_p: Some(1.0),
             max_tokens: 1024,
+            timeout_ms: 30_000,
             extra: json!({}),
         },
     }
@@ -343,10 +372,25 @@ impl LlmFallbackEngine {
             &clean_commits,
         );
 
-        // 1. Aşama: NVIDIA NIM (NVIDIA_NIM_MODELS env sırasına göre)
+        // 1. Aşama: NVIDIA NIM (NVIDIA_NIM_MODELS sırasına göre, toplam 45 sn sınırıyla)
         if let Some(ref api_key) = self.config.nvidia_nim_api_key {
+            let chain_started = Instant::now();
             for model in &self.config.nvidia_nim_models {
-                match self.call_nvidia_nim(api_key, model, system_prompt, &user_prompt).await {
+                let chain_remaining = Duration::from_millis(NIM_CHAIN_TIMEOUT_MS)
+                    .saturating_sub(chain_started.elapsed());
+                if chain_remaining.is_zero() {
+                    tracing::warn!(
+                        chain_elapsed_ms = chain_started.elapsed().as_millis() as u64,
+                        "NVIDIA NIM fallback zinciri 45 sn sınırına ulaştı"
+                    );
+                    break;
+                }
+                let request_timeout = Duration::from_millis(known_profile(model).timeout_ms)
+                    .min(chain_remaining);
+                match self
+                    .call_nvidia_nim(api_key, model, system_prompt, &user_prompt, request_timeout)
+                    .await
+                {
                     Ok(draft) => {
                         tracing::info!("AI özeti başarıyla üretildi (NVIDIA NIM: {}, dil: {})", model, target_lang);
                         return draft;
@@ -418,6 +462,7 @@ impl LlmFallbackEngine {
         model: &str,
         system_prompt: &str,
         user_prompt: &str,
+        request_timeout: Duration,
     ) -> Result<EntryDraft, String> {
         let url = "https://integrate.api.nvidia.com/v1/chat/completions";
         let profile = known_profile(model);
@@ -429,20 +474,83 @@ impl LlmFallbackEngine {
                 { "role": "user", "content": user_prompt }
             ],
             "temperature": profile.temperature,
-            "top_p": profile.top_p,
             "max_tokens": profile.max_tokens,
             "stream": false
         });
+        if let Some(top_p) = profile.top_p {
+            body["top_p"] = json!(top_p);
+        }
         merge_json(&mut body, &profile.extra);
 
-        let resp = self
-            .http
-            .post(url)
-            .bearer_auth(api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("İstek hatası: {}", e))?;
+        let deadline = Instant::now() + request_timeout;
+        let mut attempt = 0;
+        let mut resp = loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(format!("{} modeli zaman aşımına uğradı", model));
+            }
+            let result = self
+                .http
+                .post(url)
+                .bearer_auth(api_key)
+                .json(&body)
+                .timeout(remaining)
+                .send()
+                .await;
+            match result {
+                Ok(response)
+                    if attempt == 0 && [502, 503, 504].contains(&response.status().as_u16()) =>
+                {
+                    tracing::warn!(
+                        model = %model,
+                        status = %response.status(),
+                        retry_delay_ms = 300,
+                        "NVIDIA NIM geçici HTTP hatası; aynı model bir kez yeniden deneniyor"
+                    );
+                    attempt += 1;
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if attempt == 0 => {
+                    tracing::warn!(
+                        model = %model,
+                        error = %error,
+                        retry_delay_ms = 300,
+                        "NVIDIA NIM ağ hatası; aynı model bir kez yeniden deneniyor"
+                    );
+                    attempt += 1;
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                }
+                Err(error) => return Err(format!("İstek hatası: {}", error)),
+            }
+        };
+
+        while resp.status().as_u16() == 202 {
+            let request_id = resp
+                .headers()
+                .get("NVCF-REQID")
+                .and_then(|value| value.to_str().ok())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "NVIDIA NIM 202 yanıtında NVCF-REQID başlığı yok".to_string())?
+                .to_string();
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(format!("{} modeli status polling zaman aşımına uğradı", model));
+            }
+            tokio::time::sleep(Duration::from_secs(1).min(remaining)).await;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(format!("{} modeli status polling zaman aşımına uğradı", model));
+            }
+            resp = self
+                .http
+                .get(format!("https://integrate.api.nvidia.com/v1/status/{request_id}"))
+                .bearer_auth(api_key)
+                .timeout(remaining)
+                .send()
+                .await
+                .map_err(|error| format!("NVIDIA NIM status isteği başarısız: {}", error))?;
+        }
 
         if !resp.status().is_success() {
             let status = resp.status();
