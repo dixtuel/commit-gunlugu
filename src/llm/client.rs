@@ -267,8 +267,8 @@ fn known_profile(name: &str) -> ModelProfile {
             name: name.to_string(),
             temperature: 0.5,
             top_p: None,
-            max_tokens: 2048,
-            timeout_ms: 12_000,
+            max_tokens: 3072,
+            timeout_ms: 18_000,
             extra: json!({
                 "reasoning_effort": "low",
                 "chat_template_kwargs": { "clear_thinking": true }
@@ -278,8 +278,8 @@ fn known_profile(name: &str) -> ModelProfile {
             name: name.to_string(),
             temperature: 1.0,
             top_p: Some(0.95),
-            max_tokens: 3072,
-            timeout_ms: 12_000,
+            max_tokens: 4096,
+            timeout_ms: 15_000,
             extra: json!({ "reasoning_effort": "low" }),
         },
         other => ModelProfile {
@@ -519,7 +519,7 @@ impl LlmFallbackEngine {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 }
                 Ok(response) => break response,
-                Err(error) if attempt == 0 => {
+                Err(error) if attempt == 0 && error.is_connect() => {
                     tracing::warn!(
                         model = %model,
                         error = %error,
