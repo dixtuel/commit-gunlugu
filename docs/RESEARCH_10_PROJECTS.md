@@ -1,50 +1,97 @@
-# Açık Kaynak Commit ve Changelog Projeleri İnceleme ve Güvenlik Raporu
+# Commit ve changelog araçları: kaynak kod incelemesi
 
-Bu rapor, kullanıcının talebi doğrultusunda GitHub üzerindeki **10 popüler açık kaynak commit/changelog/release-notları projesinin** mimarilerini, kaynak kodlarını, konfigürasyonlarını ve geçmiş güvenlik açıklarını (CVE / Security Advisories) detaylıca inceleyerek derlenmiştir.
+**Araştırma tarihi:** 2026-09-26 · **Amaç:** Git geçmişini, Conventional Commits mesajlarını, PR başlıklarını veya insan tarafından yazılan değişiklik kayıtlarını daha anlaşılır sürüm notlarına dönüştüren açık kaynaklı yaklaşımları karşılaştırmak.
 
----
+## Yöntem ve kapsam
 
-## 1. İncelenen 10 Proje Özeti
+13 public GitHub deposu `/opt/commit-gunlugu-research/repos/` altına `--depth 1` ile klonlandı (toplam 92 MB). README, lisans dosyası, örnek konfigürasyonlar ve konuyla ilgili kod/dokümanlar incelendi. GitHub API'den yıldız, ana dil, lisans, arşiv durumu ve son push tarihi alındı; yıldız sayıları zamanla değişir. Her klonun o anki `HEAD` özeti aşağıdaki tabloda kayıtlıdır.
 
-| # | Proje Adı | Yıldız | Dil / Çalışma Zamanı | Temel Sorumluluk / Mimari Model |
-| :- | :--- | :--- | :--- | :--- |
-| 1 | **[orhun/git-cliff](https://github.com/orhun/git-cliff)** | 12.230 ⭐ | Rust | Conventional Commits ayrıştırıcı, Tera şablon motoru, regex tabanlı commit dönüştürücü CLI/kütüphane |
-| 2 | **[semantic-release/semantic-release](https://github.com/semantic-release/semantic-release)** | 24.035 ⭐ | JavaScript / Node.js | Tam otomatik paket sürümleme, commit analizi, GitHub Release ve npm dağıtım motoru |
-| 3 | **[goreleaser/goreleaser](https://github.com/goreleaser/goreleaser)** | 16.031 ⭐ | Go | Çok platformlu Go derleme, imzalama, artifact paketleme ve otomatik changelog üretimi |
-| 4 | **[changesets/changesets](https://github.com/changesets/changesets)** | 12.389 ⭐ | TypeScript / Node.js | Monorepo odaklı sürümleme, PR tabanlı editoryal değişiklik kayıtları (`.changeset/*.md`) |
-| 5 | **[conventional-changelog/conventional-changelog](https://github.com/conventional-changelog/conventional-changelog)** | 8.508 ⭐ | TypeScript / Node.js | Conventional Commits ekosisteminin çekirdek ayrıştırıcısı ve changelog üreticisi |
-| 6 | **[googleapis/release-please](https://github.com/googleapis/release-please)** | 7.489 ⭐ | TypeScript / GitHub Action | Google standartlarında otomatik Release PR açma, manifest tabanlı kütüphane sürümleme |
-| 7 | **[release-drafter/release-drafter](https://github.com/release-drafter/release-drafter)** | 3.938 ⭐ | TypeScript / GitHub Action | PR etiketleri ve commit mesajlarına göre GitHub Release taslaklarını otomatik güncelleyen motor |
-| 8 | **[cookpete/auto-changelog](https://github.com/cookpete/auto-changelog)** | 1.398 ⭐ | JavaScript / Handlebars | Git loglarını Handlebars şablonlarıyla HTML/Markdown sürüm günlüğüne dönüştüren araç |
-| 9 | **[mikepenz/release-changelog-builder-action](https://github.com/mikepenz/release-changelog-builder-action)** | 866 ⭐ | TypeScript / GitHub Action | İki git tag veya commit arasındaki PR/commit farklarını regex ve kategorilerle derleyen CI aracı |
-| 10 | **[stonemaster/github-release-generator](https://github.com/stonemaster/github-release-generator)** | ~1 ⭐ | Rust | GitHub REST API kullanarak commit ve issue'lardan sürüm notu derleyen Rust aracı |
+On depoda araştırma tarihindeki yıldız sayısı 1.000'in üzerindeydi. `git-chglog` bu gruba girse de arşivlenmiştir; aktif ürün adayı olarak değerlendirilmemelidir. Diğer projeler güncel depolardır. Liste hem commit geçmişini doğrudan ayrıştıranları hem de daha okunur not üretmek için PR/insan girdisi kullanan komşu yaklaşımları içerir. Bunların tümü yapay zekâ ile serbest metni yeniden yazmaz.
 
----
+## İncelenen depolar
 
-## 2. Güvenlik Açıkları, Riskler ve Alınan Karşı Önlemler
+| Depo | Yıldız | Dil / lisans | Son push (UTC) | Girdi → çıktı ve kayda değer fikir | Klon `HEAD` |
+|---|---:|---|---|---|---|
+| [orhun/git-cliff](https://github.com/orhun/git-cliff) | 12.268 | Rust · MIT/Apache-2.0 | 2026-09-18 | Yerel Git geçmişi → regex/Conventional Commit ayrıştırma, gruplama ve özelleştirilebilir Tera changelog şablonu. Tag ve branch kapsamı, path filtresi seçenekleri var. | `60e0be9` |
+| [conventional-changelog/conventional-changelog](https://github.com/conventional-changelog/conventional-changelog) | 8.511 | TypeScript · ISC | 2026-09-25 | Git metadatası ve Conventional Commits → preset tabanlı CHANGELOG; parser, writer ve bump hesaplaması ayrıştırılabilir paketler halinde. | `f90c80e` |
+| [semantic-release/semantic-release](https://github.com/semantic-release/semantic-release) | 24.068 | JavaScript · MIT | 2026-09-26 | Conventional Commits → etki/sürüm analizi, release notes ve eklenti zinciriyle otomatik yayın. Tam ürün değil, CI/CD sürümleme otomasyonu. | `e8c2436` |
+| [commitizen-tools/commitizen](https://github.com/commitizen-tools/commitizen) | 3.514 | Python · MIT | 2026-09-25 | İnteraktif ve doğrulamalı commit yazımı → sürüm belirleme ve Keep a Changelog çıktısı. Kullanıcıdan baştan daha iyi yapılandırılmış girdi alır. | `642b8be` |
+| [conventional-changelog/commitlint](https://github.com/conventional-changelog/commitlint) | 18.755 | TypeScript · MIT | 2026-09-25 | Commit mesajı → kural/preset doğrulaması ve anlaşılır hata. İçeriği son kullanıcı diline çevirmez; girdi kalitesini yükseltir. | `ed3e9ae` |
+| [cocogitto/cocogitto](https://github.com/cocogitto/cocogitto) | 1.197 | Rust · MIT | 2026-04-22 | Git geçmişi → Conventional Commit kontrolü, changelog, SemVer bump ve release profilleri. CLI, libgit2 kullanır. | `8cfddce` |
+| [pawamoy/git-changelog](https://github.com/pawamoy/git-changelog) | 185 | Python · ISC | 2026-09-22 | Git log → Angular/Conventional/basic stil parser'ları ve Jinja şablonlarıyla sağlayıcıdan bağımsız changelog. | `de83c48` |
+| [googleapis/release-please](https://github.com/googleapis/release-please) | 7.554 | TypeScript · Apache-2.0 | 2026-09-14 | Commit geçmişi → güncellenen Release PR, CHANGELOG ve tag. Tek repo veya manifest ile çok bileşenli yapı; hedef branch verilebilir. README karmaşık branch yönetimini kapsam dışı sayıyor. | `edce3d8` |
+| [changesets/changesets](https://github.com/changesets/changesets) | 12.444 | TypeScript · MIT | 2026-09-22 | PR sırasında insanın yazdığı küçük `.changeset/*.md` notları → monorepo paketleri için versiyon ve changelog. Commit metninden otomatik anlam çıkarmayı hedeflemez. | `c73949b` |
+| [release-drafter/release-drafter](https://github.com/release-drafter/release-drafter) | 3.944 | TypeScript · ISC | 2026-09-23 | Bir branch'e birleştirilen PR'lar → kategori, etiket, başlık ve şablonla sürekli güncellenen release taslağı. CI/GitHub merkezli. | `849a80b` |
+| [miniscruff/changie](https://github.com/miniscruff/changie) | 910 | Go · MIT | 2026-09-19 | Dosya tabanlı, insanın yazdığı değişiklik parçaları → yapılandırılabilir toplu release notes. Commit mesajlarıyla changelog'u ayırır. | `e78b7fc` |
+| [twisted/towncrier](https://github.com/twisted/towncrier) | 922 | Python · MIT | 2026-09-08 | Issue/PR başına kısa haber parçaları → kategori ve şablonla yayın notu. Karmaşık geliştirici geçmişini kullanıcıya dönük metinden ayırır. | `b8d90be` |
+| [git-chglog/git-chglog](https://github.com/git-chglog/git-chglog) | 2.862 | Go · MIT | 2026-01-18 | Tag aralıkları ve Git geçmişi → YAML ile parser/gruplama ve template tabanlı CHANGELOG. **Arşivlenmiş**; README git-cliff'i öneriyor. | `83fc038` |
 
-GitHub Security Advisories veri tabanında bu projeler üzerinde tespit edilen kritik açıklar ve Commit Günlüğü'nde uygulanan kesin koruma katmanları:
+Raporun bir sonraki yenilemesinde yıldız ve hash değerleri yeniden çekilmelidir.
 
-### 2.1. Git CLI Argüman Enjeksiyonu (CVE-2025-59433 - `conventional-changelog`)
-- **Açık Detayı:** `conventional-changelog` ve `@conventional-changelog/git-client` paketlerinde, commit referansları ve kullanıcı girdileri doğrudan yerel `git` komut satırı argümanlarına (`git log ...`) iliştirildiğinde, kötü niyetli branch adları veya commit hash'leri (`--output=/tmp/...`) üzerinden sistemde komut enjeksiyonu yapılabiliyordu.
-- **Commit Günlüğü'ndeki Çözüm:** Sistemimiz sunucuda `git` CLI çalıştırmaz! GitHub'dan güvenli Webhook JSON payload'ını HTTP üzerinden alır ve bellek içinde Rust veri modellerine deserialize eder. Kabuk (shell) veya argüman geçişi yoktur.
+## Ürün açısından bulgular
 
-### 2.2. Loglarda ve Hata Ayıklamada Token Sızıntısı (CVE-2024-23840 - `goreleaser`, CVE-2022-31051 - `semantic-release`)
-- **Açık Detayı:** `goreleaser --debug` modu veya `semantic-release` hata yakalayıcıları, API çağrıları veya CI logları sırasında ortam değişkenlerindeki (`GITHUB_TOKEN`, `NPM_TOKEN`, webhook secret) gizli anahtarları log dosyalarına düz metin olarak basıyordu.
-- **Commit Günlüğü'ndeki Çözüm:** `tracing` yapılandırmamızda secret içeren alanlar `#[serde(skip_serializing)]` ve `#[tracing::instrument(skip(...))]` ile maskelenmiştir. Loglarda webhook secret, parola veya oturum token'ları asla yer almaz.
+### 1. Kaynağa göre üç iş akışı var
 
-### 2.3. URL Encode Edilen Özel Karakterlerde Gizli Veri İfşası (CVE-2020-26226 - `semantic-release`)
-- **Açık Detayı:** Git remote URL'lerindeki kullanıcı adı/şifre çiftleri URI encode edildiğinde regex temizleyiciler tarafından yakalanamayıp kamuya açık changelog metinlerine sızabiliyordu.
-- **Commit Günlüğü'ndeki Çözüm:** `src/sanitizer/mod.rs` modülümüz, e-posta adreslerini ve token paternlerini kapıda (`subtle` ve regex ile) temizler; `author.email` veritabanına veya kamuya açık API'ye kesinlikle kaydedilmez.
+- **Git commit'inden üretim:** git-cliff, conventional-changelog, cocogitto, git-changelog ve semantic-release; commit tip/scope/body bilgisini parse eder, filtreler ve sürüm başlıklarında gruplar. Bu yöntem Git geçmişine ve çoğu durumda yerel klona/CI checkout'una dayanır.
+- **PR'dan üretim:** Release Drafter PR başlığı, metin ve etiketlerinden taslak oluşturur. Release Please commit mesajlarını analiz edip yayınlanabilir Release PR açar. GitHub API ve CI entegrasyonları işin parçasıdır.
+- **İnsan tarafından yazılan change fragment:** Changesets, Changie ve Towncrier, geliştiriciden değişikliğin kullanıcı açısından anlamını kısa bir dosyada kaydetmesini ister. Sonuç genellikle daha temizdir; karşılığında ek katkıcı adımı gerektirir.
 
-### 2.4. Webhook Tekrarlama ve Sahtecilik Saldırıları (Replay Attacks)
-- **Risk:** Ağ trafiğini dinleyen bir saldırgan, daha önce GitHub tarafından gönderilmiş geçerli bir webhook imzasını (`X-Hub-Signature-256`) kaydedip sunucuya defalarca yeniden gönderebilir.
-- **Commit Günlüğü'ndeki Çözüm:** `webhook_events` tablosunda `github_delivery_id` alanı `UNIQUE` olarak tanımlıdır (`ON CONFLICT DO NOTHING`). Aynı delivery ID ile gelen tekrarlı istekler sıfır işlemle yutulur. Ayrıca imza karşılaştırması `subtle::ConstantTimeEq` ile sabit zamanlı yapılır.
+Commit Günlüğü'nün mevcut AI akışı ilk iki gruba göre daha serbest: webhook'taki PR/commit metinlerini düzenleme kuyruğuna alıp kullanıcıya dönük sürüm notu taslağı üretiyor. Bu araştırmadaki deterministik araçlar sınıflandırma, sürüm hesabı, şablon ve seçme/eleme kurallarında; insan-notu araçları da editoryal doğrulukta örnek oluşturuyor.
 
----
+### 2. Yeniden kullanılabilir ürün fikirleri
 
-## 3. Mimari ve Konfigürasyon Tasarımı Çıkarımları
+- Her repo için kaynak branch seçimi ve her branch'in ayrı changelog akışına yönlenmesi; Release Drafter'ın branch başına tetiklenmesi ve Release Please'ın `target-branch`/release-branch seçenekleri örnek alınabilir.
+- Conventional Commit tipi, scope, PR etiketi ve dosya yolu ile include/exclude kuralları; teknik bakım commit'lerini kullanıcı notlarından ayırmaya yardım eder.
+- Özetleyiciye ham metin yerine ayrıştırılmış olay bağlamı vermek: başlık/body, tür/scope, PR başlığı, issue referansları ve birleştirme bilgisi. Kaynak linkleri kullanıcıya gösterilebilir, ancak üretilen metinde SHA/yol gibi iç ayrıntılar ayıklanmalı.
+- Tek bir global çıktı şablonu yerine dil ve repo başına kategori/şablon tercihleri; git-cliff ve git-changelog'un esnekliği burada örnek.
+- İnsan tarafından düzenlenen change fragment fikri isteğe bağlı bir editoryal yol olarak değerlendirilebilir; webhook/AI akışının yerine geçmek zorunda değil.
 
-1. **Şablonlama:** `git-cliff` Tera şablonlarını, `auto-changelog` ise Handlebars kullanır. Commit Günlüğü, Rust ekosisteminde Jinja2 standardını getiren, sıfır bağımlılıklı ve ultra hafif **Minijinja 2** motorunu benimsemiştir.
-2. **Kategori Ayrıştırma:** Hem `git-cliff` hem `release-drafter`, Conventional Commits kurallarını (`feat:`, `fix:`, `chore:`, `breaking:`) temel alır. Commit Günlüğü hem bu kural motorunu deterministik olarak içerir hem de üstüne **NVIDIA NIM & Mikoshi AI Gateway** entegrasyonuyla editoryal akıcılık ekler.
-3. **Monorepo ve Bağımsızlık:** `changesets` felsefesinde olduğu gibi, değişiklik notları koddan bağımsız bir yaşam döngüsüne sahiptir. Kullanıcı yönetim panelinden taslakları (`DRAFT`) yayına alabilir (`PUBLISHED`) veya silebilir.
+### 3. Local `.git` kaynağı ve branch kapsamı için karar notu
+
+- **Kullanıcı isteği — bu raporda yanıt/feasibility kararı verme:** local `.git` geçmişinden commit toplama fikri daha sonra ele alınacak; hesap ve hosting koşullarıyla ilgili değerlendirme özellikle ertelendi. Bu belge bu başlıkta karar vermez.
+- **Branch tercihi ürün gereksinimi olarak kaydedildi:** repo başına branch seçimi gerekli. Mevcut uygulama proje eşlemesini `github_repo_full_name` ile yapıyor; schema'da izlenen branch tercihi yok. Webhook push olaylarında `ref` alanı zaten gelir ve silinmiş/force-push branch temizliği yapılır; bu, event işleme filtresi/branch bazlı stream'in mevcut olduğu anlamına gelmez.
+- İlk kapsam kararı gerektiğinde: repo başına tek branch mi, birden fazla branch mi; her branch ayrı public changelog/slug mu; ana branch dışı yayınlar taslakta mı kalır; PR ve release olayları hangi branch'e bağlanır soruları cevaplanmalı. Implementasyon öncesi migration, webhook filtresi, backfill/sync davranışı ve UI birlikte tasarlanmalı.
+
+## Güncel ürünle ilişki
+
+Mevcut proje Rust/Axum + SQLite'tır; modelde `github_repo_full_name` tekil proje anahtarıdır ve webhook entegrasyonu GitHub push/PR/release olaylarını kullanır. Kodu yerel `git` deposuna bağlayan çalışma ağacı veya repo başına branch ayarı bu incelemede bulunmadı. Bu rapor ürün değişikliği değildir; araştırma notudur.
+
+> Önceki rapor taslağında geçen CVE numaraları ve bazı kesin güvenlik iddiaları birincil advisory kaynağıyla doğrulanmadığı için bu sürüme taşınmadı. Bu belge CVE değerlendirmesi değildir.
+
+## VDS klon envanteri
+
+Araştırma kopyaları uygulama çalışma ağacının dışındadır; canlı servise, veritabanına veya API anahtarlarına erişmez. Lisans bilgileri GitHub API metadata'sı/klonlanan LICENSE dosyalarından okunmuştur.
+
+```text
+/opt/commit-gunlugu-research/repos/
+├── changesets/
+├── changie/
+├── cocogitto/
+├── commitizen/
+├── commitlint/
+├── conventional-changelog/
+├── git-changelog/
+├── git-chglog/       # archived upstream
+├── git-cliff/
+├── release-drafter/
+├── release-please/
+├── semantic-release/
+└── towncrier/
+```
+
+Clone'lar `--depth 1` ile alındı. Her repo için lisans, klon başına `LICENSE*` dosyasında; upstream bağlantısı `git remote -v` ile kontrol edilebilir. Güvenlik advisory geçmişi bu araştırmanın kapsamı dışındadır.
+
+## Doğrudan kaynaklar
+
+- [git-cliff README](https://github.com/orhun/git-cliff/blob/main/README.md), [CLI argümanları](https://github.com/orhun/git-cliff/blob/main/git-cliff/src/args.rs)
+- [Conventional Changelog README](https://github.com/conventional-changelog/conventional-changelog/blob/master/README.md)
+- [semantic-release README](https://github.com/semantic-release/semantic-release/blob/master/README.md)
+- [Commitizen README](https://github.com/commitizen-tools/commitizen/blob/master/README.md), [Commitlint README](https://github.com/conventional-changelog/commitlint/blob/master/README.md)
+- [Cocogitto README](https://github.com/cocogitto/cocogitto/blob/main/README.md)
+- [git-changelog README](https://github.com/pawamoy/git-changelog/blob/main/README.md)
+- [Release Please README](https://github.com/googleapis/release-please/blob/main/README.md), [customizing/branch seçenekleri](https://github.com/googleapis/release-please/blob/main/docs/customizing.md)
+- [Changesets README](https://github.com/changesets/changesets/blob/main/README.md)
+- [Release Drafter README](https://github.com/release-drafter/release-drafter/blob/master/README.md)
+- [Changie README](https://github.com/miniscruff/changie/blob/main/README.md)
+- [Towncrier dokümantasyonu](https://towncrier.readthedocs.io/)
+- [git-chglog arşiv durumu ve README](https://github.com/git-chglog/git-chglog)
