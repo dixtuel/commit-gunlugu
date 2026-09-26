@@ -11,10 +11,7 @@ use uuid::Uuid;
 use crate::auth::session::{extract_session_token, get_user_from_session};
 use crate::crypto::token::{decrypt_token, encrypt_token_for_storage};
 use crate::db::models::{Project, WidgetBrand, WidgetEntry, WidgetPayload};
-use crate::db::{
-    find_project_by_widget_key, list_all_projects, list_entries_for_project,
-    list_projects_for_user, update_entry_status, upsert_project,
-};
+use crate::db::{find_project_by_widget_key, list_all_projects, list_projects_for_user, update_entry_status, upsert_project};
 use crate::error::AppError;
 use crate::state::AppState;
 
@@ -53,10 +50,11 @@ pub async fn get_widget_data(
             .ok_or_else(|| AppError::NotFound("Geçersiz widget anahtarı".to_string()))?
     };
 
-    let entries = list_entries_for_project(
+    let entries = crate::db::list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
+        &project.tracked_branches(),
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
@@ -169,10 +167,11 @@ pub async fn get_multi_widget_data(
     let mut per_project_newest: Vec<MultiWidgetEntry> = Vec::new();
 
     for p in &resolved_projects {
-        let entries = list_entries_for_project(
+        let entries = crate::db::list_entries_for_project_branches(
             &state.db,
             &p.id,
             true,
+            &p.tracked_branches(),
             state.config.token_encryption_key.as_deref(),
         )
         .await?;
@@ -348,34 +347,41 @@ pub struct CreateProjectRequest {
 }
 
 fn normalize_tracked_branch(value: &str) -> Result<String, AppError> {
-    let value = value.trim();
-    let branch = value.strip_prefix("refs/heads/").unwrap_or(value);
-    let invalid_component = !branch.is_empty()
-        && branch
+    let mut normalized = Vec::new();
+    for raw in value.split(['\n', '\r', ',']).map(str::trim).filter(|line| !line.is_empty()) {
+        let branch = raw.strip_prefix("refs/heads/").unwrap_or(raw);
+        let invalid_component = branch
             .split('/')
             .any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"));
-    let invalid_character = branch.chars().any(|c| {
-        c.is_control() || matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\')
-    });
+        let invalid_character = branch.chars().any(|c| {
+            c.is_control() || matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\' | '|' | '"' | '<' | '>')
+        });
 
-    if branch.len() > 255
-        || branch.is_empty() && !value.is_empty()
-        || branch.starts_with('-')
-        || branch.starts_with('/')
-        || branch.ends_with('/')
-        || branch.ends_with('.')
-        || branch.contains("..")
-        || branch.contains("@{")
-        || invalid_component
-        || invalid_character
-        || value.starts_with("refs/") && !value.starts_with("refs/heads/")
-    {
-        return Err(AppError::BadRequest(
-            "Branch adı geçersiz. Yalnızca GitHub branch adını yazın (ör. main veya release/1.x).".to_string(),
-        ));
+        if branch.len() > 255
+            || branch.is_empty()
+            || branch.starts_with('-')
+            || branch.starts_with('/')
+            || branch.ends_with('/')
+            || branch.ends_with('.')
+            || branch.contains("..")
+            || branch.contains("@{")
+            || invalid_component
+            || invalid_character
+            || raw.starts_with("refs/") && !raw.starts_with("refs/heads/")
+        {
+            return Err(AppError::BadRequest(
+                "Branch adı geçersiz. Yalnızca GitHub branch adını yazın (ör. main veya release/1.x).".to_string(),
+            ));
+        }
+
+        if !normalized.iter().any(|selected| selected == branch) {
+            normalized.push(branch.to_string());
+            if normalized.len() > 100 {
+                return Err(AppError::BadRequest("En fazla 100 branch seçebilirsiniz.".to_string()));
+            }
+        }
     }
-
-    Ok(branch.to_string())
+    Ok(normalized.join("\n"))
 }
 
 pub async fn create_project_handler(
@@ -582,6 +588,9 @@ pub async fn create_manual_entry_handler(
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
+    for branch in project.tracked_branches() {
+        crate::db::assign_entry_branch(&state.db, &entry.id, &entry.project_id, &branch).await?;
+    }
 
     Ok((StatusCode::CREATED, Json(entry)))
 }
@@ -626,20 +635,11 @@ pub async fn sync_github_commits_handler(
     }
 
     let repo = &project.github_repo_full_name;
-    let url = format!("https://api.github.com/repos/{}/commits?per_page=10", repo);
-
-    let mut req = reqwest::Client::builder()
+    let client = reqwest::Client::builder()
         .user_agent("commit-gunlugu/0.1.0")
         .timeout(std::time::Duration::from_secs(15))
         .build()
-        .map_err(|e| AppError::Internal(format!("İstemci hatası: {}", e)))?
-        .get(&url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-
-    if !project.tracked_branch.is_empty() {
-        req = req.query(&[("sha", project.tracked_branch.as_str())]);
-    }
+        .map_err(|e| AppError::Internal(format!("İstemci hatası: {}", e)))?;
 
     let effective_token = project.custom_github_token.as_deref().and_then(|t| {
         let decrypted = decrypt_token(t.trim(), state.config.token_encryption_key.as_deref());
@@ -658,57 +658,49 @@ pub async fn sync_github_commits_handler(
         }
     };
 
-    if let Some(ref gh_token) = bearer_token {
-        req = req.bearer_auth(gh_token);
-    }
-
-    let res = req
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(format!("GitHub API isteği başarısız: {}", e)))?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        if status == reqwest::StatusCode::NOT_FOUND {
-            return Err(AppError::BadRequest(format!(
-                "GitHub deposu bulunamadı (404). Repo adı '{}' hatalı olabilir ya da depo gizli (private) ise erişim izni olan bir GitHub Token tanımlanmamış olabilir.",
-                repo
-            )));
+    let selected_branches = project.tracked_branches();
+    let branches = if selected_branches.is_empty() { vec![String::new()] } else { selected_branches };
+    let mut commits_by_sha: Vec<(String, serde_json::Value, Vec<String>)> = Vec::new();
+    for branch in &branches {
+        let url = format!("https://api.github.com/repos/{}/commits?per_page=10", repo);
+        let mut req = client.get(&url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if !branch.is_empty() { req = req.query(&[("sha", branch.as_str())]); }
+        if let Some(ref gh_token) = bearer_token { req = req.bearer_auth(gh_token); }
+        let res = req.send().await
+            .map_err(|e| AppError::Internal(format!("GitHub API isteği başarısız: {}", e)))?;
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            if status == reqwest::StatusCode::NOT_FOUND {
+                return Err(AppError::BadRequest(format!("GitHub deposu veya '{}' branch'i bulunamadı.", if branch.is_empty() { "varsayılan" } else { branch })));
+            }
+            if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+                return Err(AppError::BadRequest(format!("GitHub API yetkilendirme hatası (HTTP {}). Token geçersiz, süresi dolmuş veya depoyu okuma yetkisi yok.", status)));
+            }
+            return Err(AppError::Internal(format!("GitHub API hata döndürdü (HTTP {}): {}", status, body)));
         }
-        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            return Err(AppError::BadRequest(format!(
-                "GitHub API yetkilendirme hatası (HTTP {}). Tanımlanan token geçersiz, süresi dolmuş veya bu depoyu okuma yetkisine (repo scope) sahip değil.",
-                status
-            )));
-        }
-        return Err(AppError::Internal(format!(
-            "GitHub API hata döndürdü (HTTP {}): {}",
-            status, body
-        )));
-    }
-
-    let commits_json: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| AppError::Internal(format!("GitHub yanıtı parse edilemedi: {}", e)))?;
-
-    let commits = commits_json.as_array().ok_or_else(|| {
-        AppError::Internal("GitHub geçerli bir commit listesi döndürmedi".to_string())
-    })?;
-
-    // Henüz veritabanında olmayan commit'leri filtrele
-    let mut new_commits = Vec::new();
-    for c in commits.iter().rev() {
-        let sha = match c.get("sha").and_then(|s| s.as_str()) {
-            Some(s) => s,
-            None => continue,
-        };
-
-        if !crate::db::commit_sha_exists(&state.db, &project.id, sha).await? {
-            new_commits.push(c.clone());
+        let commits_json: serde_json::Value = res.json().await
+            .map_err(|e| AppError::Internal(format!("GitHub yanıtı parse edilemedi: {}", e)))?;
+        let commits = commits_json.as_array().ok_or_else(|| AppError::Internal("GitHub geçerli bir commit listesi döndürmedi".to_string()))?;
+        for commit in commits.iter().rev() {
+            let Some(sha) = commit.get("sha").and_then(|value| value.as_str()) else { continue };
+            let already_recorded = if branch.is_empty() {
+                crate::db::commit_sha_exists(&state.db, &project.id, sha).await?
+            } else {
+                crate::db::assign_branch_to_existing_commit(&state.db, &project.id, sha, branch).await?
+            };
+            if already_recorded { continue; }
+            if let Some((_, _, existing_branches)) = commits_by_sha.iter_mut().find(|(existing_sha, _, _)| existing_sha == sha) {
+                if !branch.is_empty() && !existing_branches.contains(branch) { existing_branches.push(branch.clone()); }
+            } else {
+                commits_by_sha.push((sha.to_string(), commit.clone(), if branch.is_empty() { Vec::new() } else { vec![branch.clone()] }));
+            }
         }
     }
+
+    let new_commits = commits_by_sha;
 
     if new_commits.is_empty() {
         return Ok(Json(json!({
@@ -724,7 +716,7 @@ pub async fn sync_github_commits_handler(
 
     // Arka planda AI özetleme ve kayıt yürüt (HTTP bağlantısını bekletme ve timeout önleme)
     tokio::spawn(async move {
-        for c in new_commits {
+        for (_, c, entry_branches) in new_commits {
             let sha = match c.get("sha").and_then(|s| s.as_str()) {
                 Some(s) => s,
                 None => continue,
@@ -786,6 +778,9 @@ pub async fn sync_github_commits_handler(
                 state_clone.config.token_encryption_key.as_deref(),
             )
             .await;
+            for branch in entry_branches {
+                let _ = crate::db::assign_entry_branch(&state_clone.db, &entry.id, &entry.project_id, &branch).await;
+            }
             tracing::info!("Arka plan GitHub commit sürüm notu yayına alındı: {}", entry.title);
         }
     });
@@ -795,6 +790,56 @@ pub async fn sync_github_commits_handler(
         "imported_count": count,
         "message": format!("{} yeni commit bulundu! Sürüm notları arka planda hazırlanıp yayına alınıyor...", count)
     })))
+}
+
+pub async fn list_project_branches_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let token = extract_session_token(&headers)
+        .ok_or_else(|| AppError::Unauthorized("Giriş yapmanız gerekmektedir.".to_string()))?;
+    let user = get_user_from_session(&state.db, &token, state.config.token_encryption_key.as_deref())
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
+    let project = crate::db::find_project_by_id(&state.db, &project_id)
+        .await?.ok_or_else(|| AppError::NotFound("Proje bulunamadı".to_string()))?;
+    if project.user_id.as_deref() != Some(&user.id) {
+        return Err(AppError::Unauthorized("Bu projenin branch'lerini görme yetkiniz yok".to_string()));
+    }
+
+    let token = project.custom_github_token.as_deref().and_then(|stored| {
+        let value = decrypt_token(stored.trim(), state.config.token_encryption_key.as_deref());
+        if value.is_empty() { None } else { Some(value) }
+    }).or_else(|| state.config.github_token.clone());
+    if project.is_private == 1 && token.is_none() {
+        return Err(AppError::BadRequest("Private repo branch'lerini listelemek için proje ayarlarında GitHub token gerekli.".to_string()));
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("commit-gunlugu/0.1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| AppError::Internal(format!("İstemci hatası: {}", e)))?;
+    let mut branches = Vec::new();
+    for page in 1..=10 {
+        let url = format!("https://api.github.com/repos/{}/branches", project.github_repo_full_name);
+        let mut request = client.get(url)
+            .query(&[("per_page", 100), ("page", page)])
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(ref value) = token { request = request.bearer_auth(value); }
+        let response = request.send().await
+            .map_err(|e| AppError::Internal(format!("GitHub branch isteği başarısız: {}", e)))?;
+        if !response.status().is_success() {
+            return Err(AppError::BadRequest(format!("GitHub branch listesi alınamadı (HTTP {}).", response.status())));
+        }
+        let page_items: Vec<serde_json::Value> = response.json().await
+            .map_err(|e| AppError::Internal(format!("GitHub branch yanıtı parse edilemedi: {}", e)))?;
+        let count = page_items.len();
+        branches.extend(page_items.into_iter().filter_map(|item| item.get("name").and_then(|name| name.as_str()).map(str::to_string)));
+        if count < 100 { break; }
+    }
+    Ok(Json(json!({ "branches": branches, "selected": project.tracked_branches() })))
 }
 
 /// Projeye özel Webhook Secret'ı yeniden üretir ve AES-256-GCM ile veritabanına yazar.
@@ -834,3 +879,48 @@ pub async fn regenerate_webhook_secret_handler(
         "message": "Webhook anahtarı başarıyla yenilendi."
     })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_tracked_branch() {
+        // Boş
+        assert_eq!(normalize_tracked_branch("").unwrap(), "");
+        assert_eq!(normalize_tracked_branch("   ").unwrap(), "");
+
+        // Tek branch
+        assert_eq!(normalize_tracked_branch("main").unwrap(), "main");
+        assert_eq!(normalize_tracked_branch("refs/heads/main").unwrap(), "main");
+
+        // Çoklu branch (satır satır)
+        assert_eq!(
+            normalize_tracked_branch("main\nbeta\nrelease/1.x").unwrap(),
+            "main\nbeta\nrelease/1.x"
+        );
+
+        // Çoklu branch (virgüllü)
+        assert_eq!(
+            normalize_tracked_branch("main, beta, release/1.x").unwrap(),
+            "main\nbeta\nrelease/1.x"
+        );
+
+        // Karışık (virgül + satır + fazladan boşluk + refs/heads/ öneki)
+        assert_eq!(
+            normalize_tracked_branch("refs/heads/main,   dev\n  release/v2  ").unwrap(),
+            "main\ndev\nrelease/v2"
+        );
+
+        // Tekrarlı branch'lerin tekilleştirilmesi
+        assert_eq!(
+            normalize_tracked_branch("main, dev, main").unwrap(),
+            "main\ndev"
+        );
+
+        // Geçersiz karakterler içeren branch
+        assert!(normalize_tracked_branch("invalid branch with spaces").is_err());
+        assert!(normalize_tracked_branch("bad..branch").is_err());
+    }
+}
+

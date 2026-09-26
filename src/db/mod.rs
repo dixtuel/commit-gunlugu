@@ -555,6 +555,109 @@ pub async fn delete_entries_by_commit_shas(
     Ok(deleted_titles)
 }
 
+/// Bir girdiyi kaynak branch'e bağlar; aynı SHA başka branch'te görülürse
+/// tek changelog girdisi korunup ikinci ilişki eklenir.
+pub async fn assign_entry_branch(
+    pool: &DbPool,
+    entry_id: &str,
+    project_id: &str,
+    branch_name: &str,
+) -> Result<(), AppError> {
+    if branch_name.trim().is_empty() {
+        return Ok(());
+    }
+    sqlx::query("INSERT OR IGNORE INTO entry_branches (entry_id, project_id, branch_name) VALUES (?, ?, ?)")
+        .bind(entry_id)
+        .bind(project_id)
+        .bind(branch_name)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn assign_branch_to_existing_commit(
+    pool: &DbPool,
+    project_id: &str,
+    sha: &str,
+    branch_name: &str,
+) -> Result<bool, AppError> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, source_commit_shas FROM entries WHERE project_id = ? AND source_commit_shas LIKE ?"
+    )
+    .bind(project_id)
+    .bind(format!("%{}%", sha))
+    .fetch_all(pool)
+    .await?;
+    for (entry_id, raw_shas) in rows {
+        let matches = serde_json::from_str::<Vec<String>>(&raw_shas)
+            .map(|items| items.iter().any(|item| item == sha))
+            .unwrap_or_else(|_| raw_shas.contains(sha));
+        if matches {
+            assign_entry_branch(pool, &entry_id, project_id, branch_name).await?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Branch kapsamındaki ezilmiş commit'lerin yalnız ilgili branch ilişkisini kaldırır.
+/// Girdi başka branch'lerde de kullanılıyorsa içerik korunur.
+pub async fn remove_entry_branches_by_commit_shas(
+    pool: &DbPool,
+    project_id: &str,
+    branch_name: &str,
+    shas: &[String],
+) -> Result<Vec<String>, AppError> {
+    let mut removed_titles = Vec::new();
+    for sha in shas {
+        let clean_sha = sha.trim();
+        if clean_sha.len() < 7 { continue; }
+        let pattern = format!("%{}%", clean_sha);
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT e.id, e.title, e.source_commit_shas FROM entries e JOIN entry_branches b ON b.entry_id = e.id WHERE e.project_id = ? AND b.branch_name = ? AND e.source_commit_shas LIKE ?"
+        )
+        .bind(project_id).bind(branch_name).bind(&pattern).fetch_all(pool).await?;
+        for (entry_id, title, raw_shas) in rows {
+            let matches = serde_json::from_str::<Vec<String>>(&raw_shas)
+                .map(|items| items.iter().any(|s| s.trim() == clean_sha || s.trim().starts_with(clean_sha) || clean_sha.starts_with(s.trim())))
+                .unwrap_or_else(|_| raw_shas.contains(clean_sha));
+            if !matches { continue; }
+            sqlx::query("DELETE FROM entry_branches WHERE entry_id = ? AND branch_name = ?")
+                .bind(&entry_id).bind(branch_name).execute(pool).await?;
+            let remaining: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM entry_branches WHERE entry_id = ? LIMIT 1")
+                .bind(&entry_id).fetch_optional(pool).await?;
+            if remaining.is_none() {
+                sqlx::query("DELETE FROM entries WHERE id = ?").bind(&entry_id).execute(pool).await?;
+                removed_titles.push(title);
+            }
+        }
+    }
+    Ok(removed_titles)
+}
+
+pub async fn remove_all_entries_from_branch(
+    pool: &DbPool,
+    project_id: &str,
+    branch_name: &str,
+) -> Result<Vec<String>, AppError> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT e.id, e.title FROM entries e JOIN entry_branches b ON b.entry_id = e.id WHERE e.project_id = ? AND b.branch_name = ?"
+    )
+    .bind(project_id).bind(branch_name).fetch_all(pool).await?;
+    let mut removed_titles = Vec::new();
+    for (entry_id, title) in rows {
+        sqlx::query("DELETE FROM entry_branches WHERE entry_id = ? AND branch_name = ?")
+            .bind(&entry_id).bind(branch_name).execute(pool).await?;
+        let remains: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM entry_branches WHERE entry_id = ? LIMIT 1")
+            .bind(&entry_id).fetch_optional(pool).await?;
+        if remains.is_none() {
+            sqlx::query("DELETE FROM entries WHERE id = ?").bind(&entry_id).execute(pool).await?;
+            removed_titles.push(title);
+        }
+    }
+    Ok(removed_titles)
+}
+
 /// Başlığa veya etiket adına göre sürüm notunu siler (ör. silinen GitHub Release temizliği)
 pub async fn delete_entry_by_title_or_tag(
     pool: &DbPool,
@@ -577,6 +680,33 @@ pub async fn delete_entry_by_title_or_tag(
     .await?;
 
     Ok(res.rows_affected() > 0)
+}
+
+pub async fn delete_entry_by_title_for_branch(
+    pool: &DbPool,
+    project_id: &str,
+    branch_name: &str,
+    title_or_tag: &str,
+) -> Result<bool, AppError> {
+    let clean = title_or_tag.trim();
+    if clean.is_empty() || branch_name.trim().is_empty() { return Ok(false); }
+    let pattern = format!("%{}%", clean);
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT e.id FROM entries e JOIN entry_branches b ON b.entry_id = e.id WHERE e.project_id = ? AND b.branch_name = ? AND (e.title = ? OR e.title LIKE ?)"
+    )
+    .bind(project_id).bind(branch_name).bind(clean).bind(&pattern).fetch_all(pool).await?;
+    let mut changed = false;
+    for (entry_id,) in rows {
+        sqlx::query("DELETE FROM entry_branches WHERE entry_id = ? AND branch_name = ?")
+            .bind(&entry_id).bind(branch_name).execute(pool).await?;
+        let remains: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM entry_branches WHERE entry_id = ? LIMIT 1")
+            .bind(&entry_id).fetch_optional(pool).await?;
+        if remains.is_none() {
+            sqlx::query("DELETE FROM entries WHERE id = ?").bind(&entry_id).execute(pool).await?;
+        }
+        changed = true;
+    }
+    Ok(changed)
 }
 
 // ---------------------------------------------------------------------------
@@ -642,6 +772,34 @@ pub async fn list_entries_for_project(
         e.body = unpack_text_from_storage(&e.body, key_hex);
     }
 
+    Ok(entries)
+}
+
+/// Seçili branch'lere bağlı yayınları listeler. Boş seçim legacy davranışındaki gibi tüm girdileri döndürür.
+pub async fn list_entries_for_project_branches(
+    pool: &DbPool,
+    project_id: &str,
+    published_only: bool,
+    branches: &[String],
+    key_hex: Option<&str>,
+) -> Result<Vec<Entry>, AppError> {
+    let mut entries = if branches.is_empty() {
+        list_entries_for_project(pool, project_id, published_only, key_hex).await?
+    } else {
+        let placeholders = vec!["?"; branches.len()].join(",");
+        let status = if published_only { " AND e.status = 'PUBLISHED'" } else { "" };
+        let query = format!(
+            "SELECT DISTINCT e.* FROM entries e JOIN entry_branches b ON b.entry_id = e.id WHERE e.project_id = ? AND b.branch_name IN ({}){} ORDER BY e.published_at DESC, e.created_at DESC {}",
+            placeholders, status, if published_only { "LIMIT 50" } else { "LIMIT 100" }
+        );
+        let mut q = sqlx::query_as::<_, Entry>(&query).bind(project_id);
+        for branch in branches { q = q.bind(branch); }
+        let mut rows = q.fetch_all(pool).await?;
+        for entry in &mut rows { entry.body = unpack_text_from_storage(&entry.body, key_hex); }
+        rows
+    };
+    // The unfiltered helper already decrypts; filtered rows are decrypted above.
+    let _ = &mut entries;
     Ok(entries)
 }
 
@@ -981,5 +1139,124 @@ mod tests {
         let fetched = list_entries_for_project(&pool, project_id, true, Some(&key)).await.unwrap();
         assert_eq!(fetched.len(), 1);
         assert_eq!(fetched[0].body, long_body, "Okunan veri eksiksiz ve hatasız decompress edilmiş olmalıdır");
+    }
+
+    #[tokio::test]
+    async fn test_multi_branch_entry_assignment_and_filtering() {
+        let pool = init_db("sqlite::memory:", None).await.unwrap();
+        let project_id = "test-proj-branches";
+
+        let project = Project {
+            id: project_id.to_string(),
+            user_id: None,
+            github_repo_full_name: "test/multibranch".to_string(),
+            name: "MultiBranch Test".to_string(),
+            slug: "multibranch-test".to_string(),
+            widget_key: "w_mb".to_string(),
+            brand_name: None,
+            brand_color: "#10b981".to_string(),
+            brand_logo_url: None,
+            webhook_secret: "secret".to_string(),
+            parse_mode: "ai_editorial".to_string(),
+            audience: "end_user".to_string(),
+            template_style: "standard".to_string(),
+            language: "auto".to_string(),
+            tracked_branch: "main\nbeta".to_string(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        upsert_project(&pool, &project).await.unwrap();
+
+        let entry_main = Entry {
+            id: "entry-main".to_string(),
+            project_id: project_id.to_string(),
+            category: "NEW".to_string(),
+            title: "Main Branch Feature".to_string(),
+            body: "Main desc".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 0,
+            source_commit_shas: "[]".to_string(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        let entry_beta = Entry {
+            id: "entry-beta".to_string(),
+            project_id: project_id.to_string(),
+            category: "IMPROVEMENT".to_string(),
+            title: "Beta Branch Improvement".to_string(),
+            body: "Beta desc".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 0,
+            source_commit_shas: "[]".to_string(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        let entry_dev = Entry {
+            id: "entry-dev".to_string(),
+            project_id: project_id.to_string(),
+            category: "FIX".to_string(),
+            title: "Dev Untracked Fix".to_string(),
+            body: "Dev desc".to_string(),
+            status: "PUBLISHED".to_string(),
+            ai_generated: 0,
+            source_commit_shas: "[]".to_string(),
+            source_pr_number: None,
+            author_username: Some("dev".to_string()),
+            published_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+
+        insert_entry(&pool, &entry_main, None).await.unwrap();
+        insert_entry(&pool, &entry_beta, None).await.unwrap();
+        insert_entry(&pool, &entry_dev, None).await.unwrap();
+
+        assign_entry_branch(&pool, &entry_main.id, project_id, "main").await.unwrap();
+        assign_entry_branch(&pool, &entry_beta.id, project_id, "beta").await.unwrap();
+        assign_entry_branch(&pool, &entry_dev.id, project_id, "dev").await.unwrap();
+
+        // 1. main ve beta filtrelemesi (projenin tracked branches'i)
+        let tracked = list_entries_for_project_branches(
+            &pool,
+            project_id,
+            true,
+            &["main".to_string(), "beta".to_string()],
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(tracked.len(), 2);
+        assert!(tracked.iter().any(|e| e.id == "entry-main"));
+        assert!(tracked.iter().any(|e| e.id == "entry-beta"));
+        assert!(!tracked.iter().any(|e| e.id == "entry-dev"));
+
+        // 2. Yalnızca beta filtrelemesi
+        let beta_only = list_entries_for_project_branches(
+            &pool,
+            project_id,
+            true,
+            &["beta".to_string()],
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(beta_only.len(), 1);
+        assert_eq!(beta_only[0].id, "entry-beta");
+
+        // 3. Boş filtre (tüm branch'ler)
+        let all = list_entries_for_project_branches(&pool, project_id, true, &[], None)
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 3);
     }
 }

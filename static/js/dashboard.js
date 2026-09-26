@@ -331,11 +331,47 @@ function openEditProjectModal(id, name, color, mode, audience, isPrivate, langua
   if (audienceSelect) audienceSelect.value = audience || "end_user";
   if (langSelect) langSelect.value = language || "auto";
   if (branchInput) branchInput.value = trackedBranch || "";
+  const branchChoices = document.getElementById("edit_branch_choices");
+  if (branchChoices) {
+    branchChoices.innerHTML = "";
+    branchChoices.style.display = "none";
+  }
   if (isPrivateCheckbox) isPrivateCheckbox.checked = (isPrivate === 1);
   if (tokenInput) tokenInput.value = "";
 
   togglePrivateTokenField("edit");
   toggleModal("edit-project-modal");
+}
+
+async function loadProjectBranches() {
+  if (!currentEditingProjectId) return;
+  const select = document.getElementById("edit_branch_choices");
+  if (!select) return;
+  try {
+    select.innerHTML = "";
+    const response = await fetch(`/api/v1/projects/${currentEditingProjectId}/branches`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Branch listesi alınamadı.");
+    const selected = new Set((document.getElementById("edit_tracked_branch").value || "").split(/[\r\n,]+/).map(v => v.trim()).filter(Boolean));
+    for (const name of data.branches || []) {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      option.selected = selected.has(name);
+      select.appendChild(option);
+    }
+    select.style.display = "block";
+    if (!select.options.length) showToast("GitHub deposunda branch bulunamadı.", "error");
+  } catch (error) {
+    showToast(error.message || "Branch listesi alınamadı.", "error");
+  }
+}
+
+function syncBranchChoicesToInput() {
+  const select = document.getElementById("edit_branch_choices");
+  const input = document.getElementById("edit_tracked_branch");
+  if (!select || !input) return;
+  input.value = Array.from(select.selectedOptions, option => option.value).join("\n");
 }
 
 async function submitEditProject(e) {

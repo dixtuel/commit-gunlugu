@@ -5,22 +5,35 @@ use axum::{
 use minijinja::context;
 use serde::Deserialize;
 
-use crate::db::{find_project_by_slug, list_entries_for_project};
+use crate::db::{find_project_by_slug, list_entries_for_project_branches};
 use crate::error::AppError;
 use crate::state::AppState;
+
+#[derive(Debug, Deserialize, Default)]
+pub struct PublicChangelogQuery {
+    pub branch: Option<String>,
+}
 
 pub async fn public_changelog_page(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<PublicChangelogQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let project = find_project_by_slug(&state.db, &slug)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(
+    let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+        vec![b.to_string()]
+    } else {
+        project.tracked_branches()
+    };
+
+    let entries = list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
+        &filter_branches,
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
@@ -35,6 +48,8 @@ pub async fn public_changelog_page(
             project => project,
             entries => entries,
             app_url => state.config.app_url,
+            current_branch => query.branch,
+            tracked_branches => project.tracked_branches(),
         })
         .map_err(|e| AppError::Internal(format!("Şablon render hatası: {}", e)))?;
 

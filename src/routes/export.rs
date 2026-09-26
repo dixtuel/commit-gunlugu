@@ -1,28 +1,41 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
 use serde_json::json;
 
-use crate::db::{find_project_by_slug, list_entries_for_project};
+use crate::db::{find_project_by_slug, list_entries_for_project_branches};
 use crate::error::AppError;
 use crate::state::AppState;
+
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct ExportQuery {
+    pub branch: Option<String>,
+}
 
 /// Standart Markdown (CHANGELOG.md) formatında dışa aktarma (git-cliff / semantic-release stili)
 pub async fn export_markdown_handler(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<ExportQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let project = find_project_by_slug(&state.db, &slug)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(
+    let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+        vec![b.to_string()]
+    } else {
+        project.tracked_branches()
+    };
+
+    let entries = list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
+        &filter_branches,
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
@@ -97,15 +110,23 @@ pub async fn export_markdown_handler(
 pub async fn export_rss_handler(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<ExportQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let project = find_project_by_slug(&state.db, &slug)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(
+    let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+        vec![b.to_string()]
+    } else {
+        project.tracked_branches()
+    };
+
+    let entries = list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
+        &filter_branches,
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
@@ -153,15 +174,23 @@ pub async fn export_rss_handler(
 pub async fn export_json_handler(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<ExportQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let project = find_project_by_slug(&state.db, &slug)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("'{}' projesi bulunamadı", slug)))?;
 
-    let entries = list_entries_for_project(
+    let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+        vec![b.to_string()]
+    } else {
+        project.tracked_branches()
+    };
+
+    let entries = list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
+        &filter_branches,
         state.config.token_encryption_key.as_deref(),
     )
     .await?;

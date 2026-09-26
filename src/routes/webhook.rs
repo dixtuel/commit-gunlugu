@@ -12,8 +12,11 @@ use uuid::Uuid;
 use crate::crypto::hmac::verify_github_signature;
 use crate::db::models::{Entry, Project, WebhookEvent};
 use crate::db::{
-    delete_entries_by_commit_shas, delete_entry_by_title_or_tag, find_project_by_repo,
-    insert_entry, log_webhook_event, upsert_project,
+    assign_entry_branch, delete_entries_by_commit_shas, delete_entry_by_title_for_branch,
+    delete_entry_by_title_or_tag,
+    find_project_by_repo, insert_entry, log_webhook_event, remove_all_entries_from_branch,
+    remove_entry_branches_by_commit_shas,
+    upsert_project,
 };
 use crate::error::AppError;
 use crate::sanitizer::sanitize_author;
@@ -258,10 +261,21 @@ fn payload_branch<'a>(event_type: &str, payload: &'a Value) -> Option<&'a str> {
             .and_then(|pr| pr.get("base"))
             .and_then(|base| base.get("ref"))
             .and_then(Value::as_str),
-        "release" => payload
-            .get("release")
-            .and_then(|release| release.get("target_commitish"))
-            .and_then(Value::as_str),
+        "release" => {
+            let target = payload
+                .get("release")
+                .and_then(|release| release.get("target_commitish"))
+                .and_then(Value::as_str);
+            let is_commit_sha = target.is_some_and(|value| {
+                (value.len() == 40 || value.len() == 64)
+                    && value.chars().all(|character| character.is_ascii_hexdigit())
+            });
+            if is_commit_sha {
+                payload.get("repository").and_then(|repo| repo.get("default_branch")).and_then(Value::as_str)
+            } else {
+                target
+            }
+        }
         _ => None,
     }
 }
@@ -299,9 +313,8 @@ async fn process_event_background(
                 }
             });
 
-            if !project.tracked_branch.is_empty()
-                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
-            {
+            let branch_name = payload_branch(event_type.as_str(), &payload).unwrap_or("");
+            if !project.tracked_branches().is_empty() && !project.tracks_branch(branch_name) {
                 tracing::debug!(
                     "Webhook olayı seçili branch ile eşleşmedi; atlandı (proje: {}, event: {})",
                     project_id,
@@ -344,7 +357,12 @@ async fn process_event_background(
                 }
 
                 if !discarded_shas.is_empty() {
-                    match delete_entries_by_commit_shas(&state.db, &project_id, &discarded_shas).await {
+                    let cleanup = if branch_name.is_empty() {
+                        delete_entries_by_commit_shas(&state.db, &project_id, &discarded_shas).await
+                    } else {
+                        remove_entry_branches_by_commit_shas(&state.db, &project_id, branch_name, &discarded_shas).await
+                    };
+                    match cleanup {
                         Ok(deleted_titles) => {
                             if !deleted_titles.is_empty() {
                                 tracing::info!(
@@ -365,6 +383,9 @@ async fn process_event_background(
 
             // Branch silindiyse ekleme yapmadan işlemi sonlandır
             if is_branch_deleted {
+                if !branch_name.is_empty() {
+                    let _ = remove_all_entries_from_branch(&state.db, &project_id, branch_name).await?;
+                }
                 return Ok(());
             }
 
@@ -428,6 +449,7 @@ async fn process_event_background(
             };
 
             insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
+            assign_entry_branch(&state.db, &entry.id, &entry.project_id, branch_name).await?;
             tracing::info!("Yeni push sürüm notu otomatik yayına alındı (mod: {}): {}", project.parse_mode, entry.title);
         }
         "pull_request" => {
@@ -486,9 +508,8 @@ async fn process_event_background(
                 }
             });
 
-            if !project.tracked_branch.is_empty()
-                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
-            {
+            let branch_name = payload_branch(event_type.as_str(), &payload).unwrap_or("");
+            if !project.tracked_branches().is_empty() && !project.tracks_branch(branch_name) {
                 return Ok(());
             }
 
@@ -525,6 +546,7 @@ async fn process_event_background(
             };
 
             insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
+            assign_entry_branch(&state.db, &entry.id, &entry.project_id, branch_name).await?;
             tracing::info!("Yeni PR sürüm notu otomatik yayına alındı: {}", entry.title);
         }
         "commit_comment" => {
@@ -566,9 +588,8 @@ async fn process_event_background(
                 }
             });
 
-            if !project.tracked_branch.is_empty()
-                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
-            {
+            let branch_name = payload_branch(event_type.as_str(), &payload).unwrap_or("");
+            if !project.tracked_branches().is_empty() && !project.tracks_branch(branch_name) {
                 return Ok(());
             }
 
@@ -605,6 +626,7 @@ async fn process_event_background(
             };
 
             insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
+            assign_entry_branch(&state.db, &entry.id, &entry.project_id, branch_name).await?;
             let short_sha = if commit_id.len() >= 7 { &commit_id[..7] } else { commit_id };
             tracing::info!("Yeni commit_comment sürüm notu otomatik yayına alındı (commit: {}): {}", short_sha, entry.title);
         }
@@ -632,9 +654,8 @@ async fn process_event_background(
                     updated_at: "".to_string(),
                 }
             });
-            if !project.tracked_branch.is_empty()
-                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
-            {
+            let branch_name = payload_branch(event_type.as_str(), &payload).unwrap_or("");
+            if !project.tracked_branches().is_empty() && !project.tracks_branch(branch_name) {
                 return Ok(());
             }
 
@@ -652,7 +673,11 @@ async fn process_event_background(
                 };
 
                 if !title.is_empty() {
-                    let _ = delete_entry_by_title_or_tag(&state.db, &project_id, &title).await;
+                    if branch_name.is_empty() {
+                        let _ = delete_entry_by_title_or_tag(&state.db, &project_id, &title).await;
+                    } else {
+                        let _ = delete_entry_by_title_for_branch(&state.db, &project_id, branch_name, &title).await;
+                    }
                     tracing::info!("Silinen GitHub Release nedeniyle sürüm notu temizlendi: {}", title);
                 }
                 return Ok(());
@@ -693,6 +718,7 @@ async fn process_event_background(
             };
 
             insert_entry(&state.db, &entry, state.config.token_encryption_key.as_deref()).await?;
+            assign_entry_branch(&state.db, &entry.id, &entry.project_id, branch_name).await?;
             tracing::info!("Resmi GitHub Release sürüm notu eklendi: {}", entry.title);
         }
         _ => {}

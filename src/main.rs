@@ -107,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/entries/:id/delete", post(routes::api::delete_entry_handler))
         .route("/api/v1/projects", get(routes::api::list_projects_handler).post(routes::api::create_project_handler))
         .route("/api/v1/projects/:id/settings", post(routes::api::update_project_settings_handler))
+        .route("/api/v1/projects/:id/branches", get(routes::api::list_project_branches_handler))
         .route("/api/v1/projects/:id/regenerate-secret", post(routes::api::regenerate_webhook_secret_handler))
         .route("/api/v1/projects/:id/delete", post(routes::api::delete_project_handler))
         .route("/api/v1/projects/:id/entries", post(routes::api::create_manual_entry_handler))
@@ -129,7 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/privacy", get(routes::legal::privacy_page))
         .route("/robots.txt", get(routes::seo::robots_txt))
         .route("/sitemap.xml", get(routes::seo::sitemap_xml))
-        .route("/google:token.html", get(routes::seo::google_verification));
+        .route("/google:token.html", get(routes::seo::google_verification))
+        .route("/BingSiteAuth.xml", get(routes::seo::bing_verification))
+        .route("/yandex_:token.html", get(routes::seo::yandex_verification));
 
     // Herkese Açık ve Dışa Aktarma rotaları
     let public_routes = Router::new()

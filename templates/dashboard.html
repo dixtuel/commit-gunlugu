@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block robots %}noindex, follow{% endblock %}
 
 {% block title %}Kontrol Paneli — Commit Günlüğü{% endblock %}
 
@@ -132,7 +133,7 @@
               {% else %}Oto Dil{% endif %}
             </span>
             <span class="mode-badge" title="İzlenen GitHub branch">
-              {% if p.tracked_branch %}Branch: {{ p.tracked_branch }}{% else %}Tüm branchler{% endif %}
+              {% if p.tracked_branch %}Branch: {{ p.tracked_branch | replace("\n", ", ") }}{% else %}Tüm branchler{% endif %}
             </span>
             {% if p.is_private == 1 %}
             <span class="mode-badge visibility-badge visibility-private" title="Gizli Depo (Kişisel Token Gerekli)">[private]</span>
@@ -355,9 +356,9 @@
         <input type="text" id="proj_name" name="proj_name" placeholder="ör. Commit Günlüğü" required class="input-text">
       </div>
       <div class="form-group">
-        <label for="tracked_branch">İzlenecek Branch</label>
-        <input type="text" id="tracked_branch" name="tracked_branch" placeholder="Boş bırakılırsa tüm branchler" class="input-text" autocomplete="off">
-        <p class="text-xs text-subtle">Örnek: <code>main</code> veya <code>release/1.x</code>. Boş değer tüm branchleri izler.</p>
+        <label for="tracked_branch">İzlenecek Branch(ler)</label>
+        <textarea id="tracked_branch" name="tracked_branch" placeholder="main&#10;release/1.x" class="input-text" rows="3"></textarea>
+        <p class="text-xs text-subtle">Tek veya birden fazla branch yazabilirsiniz (virgülle veya alt alta, ör. <code>main, dev</code>). Boş bırakılırsa tüm branchler izlenir.</p>
       </div>
       <div class="form-group">
         <label for="parse_mode">Çalışma Modu (Dönüştürme Motoru)</label>
@@ -424,9 +425,11 @@
         <input type="text" id="edit_proj_name" required class="input-text">
       </div>
       <div class="form-group">
-        <label for="edit_tracked_branch">İzlenecek Branch</label>
-        <input type="text" id="edit_tracked_branch" placeholder="Boş bırakılırsa tüm branchler" class="input-text" autocomplete="off">
-        <p class="text-xs text-subtle">Örnek: <code>main</code> veya <code>release/1.x</code>. Boş değer tüm branchleri izler.</p>
+        <label for="edit_tracked_branch">İzlenecek Branch(ler)</label>
+        <textarea id="edit_tracked_branch" placeholder="main&#10;release/1.x" class="input-text" rows="3"></textarea>
+        <p class="text-xs text-subtle">Tek veya birden fazla branch yazabilirsiniz (virgülle veya alt alta, ör. <code>main, dev</code>). Boş bırakılırsa tüm branchler izlenir.</p>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="loadProjectBranches()" style="margin-top:0.25rem;">GitHub branch listesini yükle</button>
+        <select id="edit_branch_choices" class="input-select" multiple size="5" aria-label="Takip edilecek GitHub branch'leri" onchange="syncBranchChoicesToInput()" style="margin-top:0.5rem; display:none"></select>
       </div>
       <div class="form-group">
         <label for="edit_parse_mode">Çalışma Modu (Ayrıştırma Motoru)</label>

@@ -48,12 +48,29 @@ pub struct Project {
     pub audience: String,         // end_user | developer
     pub template_style: String,   // standard | grouped | compact
     pub language: String,         // auto | tr | en
-    pub tracked_branch: String,   // empty = all branches; otherwise exact GitHub branch name
+    pub tracked_branch: String,   // newline-separated selected branches; empty = all branches
     pub is_private: i64,          // 0 = public, 1 = private
     #[serde(skip_serializing)]
     pub custom_github_token: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl Project {
+    pub fn tracked_branches(&self) -> Vec<String> {
+        self.tracked_branch
+            .split(['\n', '\r', ','])
+            .map(str::trim)
+            .filter(|branch| !branch.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    pub fn tracks_branch(&self, branch: &str) -> bool {
+        let clean = branch.strip_prefix("refs/heads/").unwrap_or(branch).trim();
+        let selected = self.tracked_branches();
+        selected.is_empty() || selected.iter().any(|item| item == clean)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -107,3 +124,62 @@ pub struct WidgetEntry {
     pub author: Option<String>,
     pub published_at: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_project_tracked_branches_parsing() {
+        let mut proj = Project {
+            id: "1".into(),
+            user_id: None,
+            github_repo_full_name: "test/repo".into(),
+            name: "test".into(),
+            slug: "test".into(),
+            widget_key: "k".into(),
+            brand_name: None,
+            brand_color: "#000".into(),
+            brand_logo_url: None,
+            webhook_secret: "s".into(),
+            parse_mode: "ai_editorial".into(),
+            audience: "end_user".into(),
+            template_style: "standard".into(),
+            language: "auto".into(),
+            tracked_branch: "".into(),
+            is_private: 0,
+            custom_github_token: None,
+            created_at: "".into(),
+            updated_at: "".into(),
+        };
+
+        // Boş branch: her şeyi izler
+        assert!(proj.tracked_branches().is_empty());
+        assert!(proj.tracks_branch("main"));
+        assert!(proj.tracks_branch("refs/heads/feature-1"));
+
+        // Tek branch
+        proj.tracked_branch = "main".into();
+        assert_eq!(proj.tracked_branches(), vec!["main"]);
+        assert!(proj.tracks_branch("main"));
+        assert!(proj.tracks_branch("refs/heads/main"));
+        assert!(!proj.tracks_branch("dev"));
+
+        // Çoklu branch (alt alta / satır satır)
+        proj.tracked_branch = "main\nbeta\nv1.x".into();
+        assert_eq!(proj.tracked_branches(), vec!["main", "beta", "v1.x"]);
+        assert!(proj.tracks_branch("main"));
+        assert!(proj.tracks_branch("beta"));
+        assert!(proj.tracks_branch("refs/heads/v1.x"));
+        assert!(!proj.tracks_branch("release"));
+
+        // Çoklu branch (virgülle ayrılmış)
+        proj.tracked_branch = "main, develop, staging".into();
+        assert_eq!(proj.tracked_branches(), vec!["main", "develop", "staging"]);
+        assert!(proj.tracks_branch("main"));
+        assert!(proj.tracks_branch("develop"));
+        assert!(proj.tracks_branch("staging"));
+        assert!(!proj.tracks_branch("prod"));
+    }
+}
+
