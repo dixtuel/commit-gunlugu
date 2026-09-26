@@ -124,6 +124,7 @@ pub async fn handle_github_webhook(
                 audience: "end_user".to_string(),
                 template_style: "standard".to_string(),
                 language: "auto".to_string(),
+                tracked_branch: "".to_string(),
                 is_private: 0,
                 custom_github_token: None,
                 created_at: chrono::Utc::now().to_rfc3339(),
@@ -246,6 +247,25 @@ async fn fetch_discarded_commits(
     }
 }
 
+fn payload_branch<'a>(event_type: &str, payload: &'a Value) -> Option<&'a str> {
+    match event_type {
+        "push" => payload
+            .get("ref")
+            .and_then(Value::as_str)
+            .and_then(|reference| reference.strip_prefix("refs/heads/")),
+        "pull_request" => payload
+            .get("pull_request")
+            .and_then(|pr| pr.get("base"))
+            .and_then(|base| base.get("ref"))
+            .and_then(Value::as_str),
+        "release" => payload
+            .get("release")
+            .and_then(|release| release.get("target_commitish"))
+            .and_then(Value::as_str),
+        _ => None,
+    }
+}
+
 async fn process_event_background(
     state: AppState,
     project_id: String,
@@ -271,12 +291,24 @@ async fn process_event_background(
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
                     language: "auto".to_string(),
+                    tracked_branch: "".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
                     updated_at: "".to_string(),
                 }
             });
+
+            if !project.tracked_branch.is_empty()
+                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
+            {
+                tracing::debug!(
+                    "Webhook olayı seçili branch ile eşleşmedi; atlandı (proje: {}, event: {})",
+                    project_id,
+                    event_type
+                );
+                return Ok(());
+            }
 
             let forced = payload.get("forced").and_then(|f| f.as_bool()).unwrap_or(false);
             let deleted = payload.get("deleted").and_then(|d| d.as_bool()).unwrap_or(false);
@@ -446,12 +478,19 @@ async fn process_event_background(
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
                     language: "auto".to_string(),
+                    tracked_branch: "".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
                     updated_at: "".to_string(),
                 }
             });
+
+            if !project.tracked_branch.is_empty()
+                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
+            {
+                return Ok(());
+            }
 
             let draft = match state.llm.summarize_for_project(
                 &project.parse_mode,
@@ -519,12 +558,19 @@ async fn process_event_background(
                     audience: "end_user".to_string(),
                     template_style: "standard".to_string(),
                     language: "auto".to_string(),
+                    tracked_branch: "".to_string(),
                     is_private: 0,
                     custom_github_token: None,
                     created_at: "".to_string(),
                     updated_at: "".to_string(),
                 }
             });
+
+            if !project.tracked_branch.is_empty()
+                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
+            {
+                return Ok(());
+            }
 
             let commit_shas = if !commit_id.is_empty() { vec![commit_id.to_string()] } else { vec![] };
             let commit_messages = vec![body.to_string()];
@@ -563,6 +609,35 @@ async fn process_event_background(
             tracing::info!("Yeni commit_comment sürüm notu otomatik yayına alındı (commit: {}): {}", short_sha, entry.title);
         }
         "release" => {
+            let project = crate::db::find_project_by_id(&state.db, &project_id).await?.unwrap_or_else(|| {
+                crate::db::models::Project {
+                    id: project_id.clone(),
+                    user_id: None,
+                    github_repo_full_name: "bilinmeyen/repo".to_string(),
+                    name: "Proje".to_string(),
+                    slug: "proje".to_string(),
+                    widget_key: "w_def".to_string(),
+                    brand_name: None,
+                    brand_color: "#10b981".to_string(),
+                    brand_logo_url: None,
+                    webhook_secret: "".to_string(),
+                    parse_mode: "ai_editorial".to_string(),
+                    audience: "end_user".to_string(),
+                    template_style: "standard".to_string(),
+                    language: "auto".to_string(),
+                    tracked_branch: "".to_string(),
+                    is_private: 0,
+                    custom_github_token: None,
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                }
+            });
+            if !project.tracked_branch.is_empty()
+                && payload_branch(event_type.as_str(), &payload) != Some(project.tracked_branch.as_str())
+            {
+                return Ok(());
+            }
+
             let action = payload.get("action").and_then(|a| a.as_str()).unwrap_or("");
             if action == "deleted" {
                 let release = payload.get("release");
@@ -679,6 +754,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -748,6 +824,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -816,6 +893,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: chrono::Utc::now().to_rfc3339(),

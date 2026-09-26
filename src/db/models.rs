@@ -48,6 +48,7 @@ pub struct Project {
     pub audience: String,         // end_user | developer
     pub template_style: String,   // standard | grouped | compact
     pub language: String,         // auto | tr | en
+    pub tracked_branch: String,   // empty = all branches; otherwise exact GitHub branch name
     pub is_private: i64,          // 0 = public, 1 = private
     #[serde(skip_serializing)]
     pub custom_github_token: Option<String>,

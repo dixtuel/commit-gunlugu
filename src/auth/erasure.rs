@@ -314,6 +314,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),

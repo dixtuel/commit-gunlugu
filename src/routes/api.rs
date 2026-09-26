@@ -342,8 +342,40 @@ pub struct CreateProjectRequest {
     pub audience: Option<String>,
     pub template_style: Option<String>,
     pub language: Option<String>,
+    pub tracked_branch: Option<String>,
     pub is_private: Option<bool>,
     pub custom_github_token: Option<String>,
+}
+
+fn normalize_tracked_branch(value: &str) -> Result<String, AppError> {
+    let value = value.trim();
+    let branch = value.strip_prefix("refs/heads/").unwrap_or(value);
+    let invalid_component = !branch.is_empty()
+        && branch
+            .split('/')
+            .any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"));
+    let invalid_character = branch.chars().any(|c| {
+        c.is_control() || matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\')
+    });
+
+    if branch.len() > 255
+        || branch.is_empty() && !value.is_empty()
+        || branch.starts_with('-')
+        || branch.starts_with('/')
+        || branch.ends_with('/')
+        || branch.ends_with('.')
+        || branch.contains("..")
+        || branch.contains("@{")
+        || invalid_component
+        || invalid_character
+        || value.starts_with("refs/") && !value.starts_with("refs/heads/")
+    {
+        return Err(AppError::BadRequest(
+            "Branch adı geçersiz. Yalnızca GitHub branch adını yazın (ör. main veya release/1.x).".to_string(),
+        ));
+    }
+
+    Ok(branch.to_string())
 }
 
 pub async fn create_project_handler(
@@ -358,6 +390,7 @@ pub async fn create_project_handler(
         .ok_or_else(|| AppError::Unauthorized("Geçersiz oturum.".to_string()))?;
 
     let is_private = payload.is_private.unwrap_or(false);
+    let tracked_branch = normalize_tracked_branch(payload.tracked_branch.as_deref().unwrap_or(""))?;
     let custom_token = payload
         .custom_github_token
         .map(|t| t.trim().to_string())
@@ -395,6 +428,7 @@ pub async fn create_project_handler(
         audience: payload.audience.unwrap_or_else(|| "end_user".to_string()),
         template_style: payload.template_style.unwrap_or_else(|| "standard".to_string()),
         language: payload.language.unwrap_or_else(|| "auto".to_string()),
+        tracked_branch,
         is_private: if is_private { 1 } else { 0 },
         custom_github_token: custom_token,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -414,6 +448,7 @@ pub struct UpdateProjectSettingsRequest {
     pub audience: String,
     pub template_style: String,
     pub language: Option<String>,
+    pub tracked_branch: Option<String>,
     pub is_private: Option<bool>,
     pub custom_github_token: Option<String>,
 }
@@ -441,6 +476,10 @@ pub async fn update_project_settings_handler(
     let name = payload.name.unwrap_or(existing.name);
     let brand_color = payload.brand_color.unwrap_or(existing.brand_color);
     let language = payload.language.unwrap_or(existing.language);
+    let tracked_branch = match payload.tracked_branch.as_deref() {
+        Some(branch) => normalize_tracked_branch(branch)?,
+        None => existing.tracked_branch,
+    };
 
     let is_private_val = payload
         .is_private
@@ -473,6 +512,7 @@ pub async fn update_project_settings_handler(
         &payload.audience,
         &payload.template_style,
         &language,
+        &tracked_branch,
         is_private_val,
         effective_custom_token,
     )
@@ -596,6 +636,10 @@ pub async fn sync_github_commits_handler(
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
+
+    if !project.tracked_branch.is_empty() {
+        req = req.query(&[("sha", project.tracked_branch.as_str())]);
+    }
 
     let effective_token = project.custom_github_token.as_deref().and_then(|t| {
         let decrypted = decrypt_token(t.trim(), state.config.token_encryption_key.as_deref());

@@ -49,7 +49,7 @@ Commit Günlüğü'nün mevcut AI akışı ilk iki gruba göre daha serbest: web
 ### 3. Local `.git` kaynağı ve branch kapsamı için karar notu
 
 - **Kullanıcı isteği — bu raporda yanıt/feasibility kararı verme:** local `.git` geçmişinden commit toplama fikri daha sonra ele alınacak; hesap ve hosting koşullarıyla ilgili değerlendirme özellikle ertelendi. Bu belge bu başlıkta karar vermez.
-- **Branch tercihi ürün gereksinimi olarak kaydedildi:** repo başına branch seçimi gerekli. Mevcut uygulama proje eşlemesini `github_repo_full_name` ile yapıyor; schema'da izlenen branch tercihi yok. Webhook push olaylarında `ref` alanı zaten gelir ve silinmiş/force-push branch temizliği yapılır; bu, event işleme filtresi/branch bazlı stream'in mevcut olduğu anlamına gelmez.
+- **Branch tercihi ürün gereksinimi olarak kaydedildi ve uygulandı:** her repo için tek branch seçilebilir; boş değer tüm branch'leri izlemeye devam eder. Seçim push/PR/release webhook'larında ve elle GitHub commit senkronizasyonunda kullanılır. Migration ve UI/API değişiklikleri `main` kaynak dalındadır; üretim servisi henüz yeni binary ile yeniden başlatılmadı.
 - İlk kapsam kararı gerektiğinde: repo başına tek branch mi, birden fazla branch mi; her branch ayrı public changelog/slug mu; ana branch dışı yayınlar taslakta mı kalır; PR ve release olayları hangi branch'e bağlanır soruları cevaplanmalı. Implementasyon öncesi migration, webhook filtresi, backfill/sync davranışı ve UI birlikte tasarlanmalı.
 
 ## Güncel ürünle ilişki

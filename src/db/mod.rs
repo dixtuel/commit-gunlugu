@@ -344,8 +344,8 @@ pub async fn upsert_project(
 ) -> Result<(), AppError> {
     sqlx::query(
         r#"
-        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, language, is_private, custom_github_token, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO projects (id, user_id, github_repo_full_name, name, slug, widget_key, brand_name, brand_color, brand_logo_url, webhook_secret, parse_mode, audience, template_style, language, tracked_branch, is_private, custom_github_token, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(github_repo_full_name) DO UPDATE SET
             user_id = COALESCE(excluded.user_id, projects.user_id),
             name = excluded.name,
@@ -357,6 +357,7 @@ pub async fn upsert_project(
             audience = excluded.audience,
             template_style = excluded.template_style,
             language = excluded.language,
+            tracked_branch = excluded.tracked_branch,
             is_private = excluded.is_private,
             custom_github_token = COALESCE(excluded.custom_github_token, projects.custom_github_token),
             updated_at = datetime('now')
@@ -376,6 +377,7 @@ pub async fn upsert_project(
     .bind(&project.audience)
     .bind(&project.template_style)
     .bind(&project.language)
+    .bind(&project.tracked_branch)
     .bind(project.is_private)
     .bind(&project.custom_github_token)
     .execute(pool)
@@ -407,6 +409,7 @@ pub async fn update_project_full_settings(
     audience: &str,
     template_style: &str,
     language: &str,
+    tracked_branch: &str,
     is_private: i64,
     custom_github_token: Option<&str>,
 ) -> Result<bool, AppError> {
@@ -414,7 +417,7 @@ pub async fn update_project_full_settings(
         sqlx::query(
             r#"
             UPDATE projects
-            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, is_private = ?, custom_github_token = ?, updated_at = datetime('now')
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, tracked_branch = ?, is_private = ?, custom_github_token = ?, updated_at = datetime('now')
             WHERE id = ? AND user_id = ?
             "#
         )
@@ -424,6 +427,7 @@ pub async fn update_project_full_settings(
         .bind(audience)
         .bind(template_style)
         .bind(language)
+        .bind(tracked_branch)
         .bind(is_private)
         .bind(token)
         .bind(project_id)
@@ -434,7 +438,7 @@ pub async fn update_project_full_settings(
         sqlx::query(
             r#"
             UPDATE projects
-            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, is_private = ?, updated_at = datetime('now')
+            SET name = ?, brand_color = ?, parse_mode = ?, audience = ?, template_style = ?, language = ?, tracked_branch = ?, is_private = ?, updated_at = datetime('now')
             WHERE id = ? AND user_id = ?
             "#
         )
@@ -444,6 +448,7 @@ pub async fn update_project_full_settings(
         .bind(audience)
         .bind(template_style)
         .bind(language)
+        .bind(tracked_branch)
         .bind(is_private)
         .bind(project_id)
         .bind(user_id)
@@ -831,6 +836,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),
@@ -929,6 +935,7 @@ mod tests {
             audience: "end_user".to_string(),
             template_style: "standard".to_string(),
             language: "auto".to_string(),
+            tracked_branch: "".to_string(),
             is_private: 0,
             custom_github_token: None,
             created_at: Utc::now().to_rfc3339(),
@@ -976,4 +983,3 @@ mod tests {
         assert_eq!(fetched[0].body, long_body, "Okunan veri eksiksiz ve hatasız decompress edilmiş olmalıdır");
     }
 }
-

@@ -1,0 +1,2 @@
+ALTER TABLE projects
+ADD COLUMN tracked_branch TEXT NOT NULL DEFAULT '';

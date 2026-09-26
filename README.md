@@ -147,7 +147,7 @@ Sunucu varsayılan olarak `http://127.0.0.1:8095` adresinde dinlemeye başlar.
 
 ## 🎯 Hızlı Başlangıç (3 Adımda Kullanım)
 
-1. **Hesap Oluşturun:** [commit.dixtuel.tr](https://commit.dixtuel.tr) adresine gidin, hesabınızı oluşturun ve yeni bir proje ekleyin.
+1. **Hesap Oluşturun:** [commit.dixtuel.tr](https://commit.dixtuel.tr) adresine gidin, hesabınızı oluşturup yeni bir proje ekleyin. Proje ayarlarında isterseniz tek bir branch seçin (`main`, `release/1.x` gibi); boş bırakırsanız tüm branch'ler izlenir. Seçim webhook olaylarına ve elle GitHub senkronizasyonuna uygulanır.
 2. **GitHub Webhook'unu Ekleyin:** GitHub deponuzun **Settings &rarr; Webhooks** sekmesine giderek size verilen Webhook URL ve Gizli Anahtarı (Secret) yapıştırın, `push` ve `pull_request` olaylarını aktif edin.
 3. **Yayınlayın & Gömün:** Yapay zeka tarafından hazırlanan sürüm notlarınızı inceleyin, sitenize tek satır `<script>` widget'ı ekleyerek veya doğrudan `/c/:slug` linkinizi paylaşarak müşterilerinize duyurun!
 
