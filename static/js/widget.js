@@ -115,10 +115,12 @@
     let layout = 'card';
     let theme = 'auto';
     let limit = 5;
+    let branch = null;
 
     if (current) {
       key = current.getAttribute('data-key');
       keys = current.getAttribute('data-keys');
+      branch = current.getAttribute('data-branch') || null;
       try {
         if (current.src) {
           const url = new URL(current.src, window.location.href);
@@ -126,6 +128,9 @@
           if (!key && !keys) {
             key = url.searchParams.get('key');
             keys = url.searchParams.get('keys');
+          }
+          if (!branch) {
+            branch = url.searchParams.get('branch');
           }
         }
       } catch (e) {
@@ -138,19 +143,24 @@
       limit = parseInt(current.getAttribute('data-limit') || '5', 10);
     }
 
-    return { key, keys, origin, mode, layout, theme, limit, scriptElement: current };
+    return { key, keys, branch, origin, mode, layout, theme, limit, scriptElement: current };
   }
 
-  // Tek proje verisini getir
-  async function fetchWidgetData(origin, key) {
+  // Tek proje verisini getir (isteğe bağlı branch filtresiyle)
+  async function fetchWidgetData(origin, key, branch) {
     const targetOrigin = origin || DEFAULT_ORIGIN;
-    const cacheKey = `${targetOrigin}:${key}`;
+    const cleanBranch = branch ? branch.trim() : '';
+    const cacheKey = `${targetOrigin}:${key}:${cleanBranch}`;
     if (dataCache.has(cacheKey)) {
       return dataCache.get(cacheKey);
     }
 
     try {
-      const res = await fetch(`${targetOrigin}/api/v1/widget/${key}`);
+      let url = `${targetOrigin}/api/v1/widget/${key}`;
+      if (cleanBranch) {
+        url += `?branch=${encodeURIComponent(cleanBranch)}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -163,16 +173,20 @@
     }
   }
 
-  // Çoklu proje verisini harmanlayarak getir
-  async function fetchMultiWidgetData(origin, keys, limit, distinct) {
+  // Çoklu proje verisini harmanlayarak getir (isteğe bağlı branch filtresiyle)
+  async function fetchMultiWidgetData(origin, keys, limit, distinct, branch) {
     const targetOrigin = origin || DEFAULT_ORIGIN;
-    const cacheKey = `${targetOrigin}:multi:${keys}:${limit}:${distinct}`;
+    const cleanBranch = branch ? branch.trim() : '';
+    const cacheKey = `${targetOrigin}:multi:${keys}:${limit}:${distinct}:${cleanBranch}`;
     if (dataCache.has(cacheKey)) {
       return dataCache.get(cacheKey);
     }
 
     try {
-      const url = `${targetOrigin}/api/v1/widget/multi?keys=${encodeURIComponent(keys)}&limit=${limit || 3}&distinct=${distinct !== false}`;
+      let url = `${targetOrigin}/api/v1/widget/multi?keys=${encodeURIComponent(keys)}&limit=${limit || 3}&distinct=${distinct !== false}`;
+      if (cleanBranch) {
+        url += `&branch=${encodeURIComponent(cleanBranch)}`;
+      }
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
@@ -747,6 +761,7 @@
       const layout = el.getAttribute('data-layout') || scriptConfig.layout || 'card';
       const mode = el.getAttribute('data-mode') || 'shadow';
       const theme = el.getAttribute('data-theme') || scriptConfig.theme || 'auto';
+      const branch = el.getAttribute('data-branch') || scriptConfig.branch || null;
 
       // Özel renk & stil parametreleri
       const bg = el.getAttribute('data-bg') || null;
@@ -789,10 +804,10 @@
         let data;
         if (rawKeys.includes(',')) {
           // Çoklu proje modu
-          data = await fetchMultiWidgetData(origin, rawKeys, limit || 3, distinct);
+          data = await fetchMultiWidgetData(origin, rawKeys, limit || 3, distinct, branch);
         } else {
           // Tek proje modu
-          data = await fetchWidgetData(origin, rawKeys);
+          data = await fetchWidgetData(origin, rawKeys, branch);
         }
 
         if (data && data.entries) {
@@ -836,7 +851,7 @@
     // 2) Script üzerinden tek başına badge modu
     if (scriptConfig.key && scriptConfig.mode === 'badge' && !inlineElements.length) {
       try {
-        const data = await fetchWidgetData(scriptConfig.origin, scriptConfig.key);
+        const data = await fetchWidgetData(scriptConfig.origin, scriptConfig.key, scriptConfig.branch);
         if (data && data.entries && data.entries.length > 0) {
           renderBadgeWidget(data, scriptConfig.origin, { theme: scriptConfig.theme });
         }

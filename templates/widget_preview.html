@@ -40,11 +40,102 @@
       </div>
     </header>
 
+    <!-- PROJE & BRANCH SEÇİMİ (KULLANICI İZOLASYONLU) -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span>1. Proje ve Branch (Dal) Seçimi</span>
+            {% if is_authenticated %}
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Kendi Projeleriniz</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Demo Modu</span>
+            {% endif %}
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Widget'ın hangi projenizin hangi branch'ine ait güncellemeleri çekeceğini belirleyin.</p>
+        </div>
+
+        {% if not is_authenticated %}
+          <a href="/login?redirect=/widget-preview" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1">
+            <span>Kendi projelerinizi seçmek için giriş yapın &rarr;</span>
+          </a>
+        {% endif %}
+      </div>
+
+      {% if is_authenticated %}
+        {% if user_projects and user_projects|length > 0 %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+            <!-- Proje Seçimi -->
+            <div class="space-y-1.5">
+              <label for="sel-user-project" class="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Projeniz:</span>
+                <span class="text-[11px] text-slate-400 font-normal">Sadece size ait projeler</span>
+              </label>
+              <select id="sel-user-project" onchange="onProjectSelectChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                {% for p in user_projects %}
+                  <option value="{{ p.widget_key }}" data-slug="{{ p.slug }}" data-name="{{ p.name }}" data-color="{{ p.brand_color | default('') }}" {% if p.widget_key == preview_key %}selected{% endif %}>
+                    {{ p.name }} ({{ p.slug }})
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Branch Seçimi -->
+            <div class="space-y-1.5">
+              <label for="sel-user-branch" class="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Branch (Dal):</span>
+                <span id="branch-badge-info" class="text-[11px] text-emerald-600 font-medium">Tümü veya belirli dal</span>
+              </label>
+              <select id="sel-user-branch" onchange="onBranchSelectChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <option value="">Tüm Branch'ler (Varsayılan)</option>
+                <!-- JS ile seçili projenin tracked_branches listesi doldurulur -->
+              </select>
+            </div>
+
+            <!-- Özel Branch Girişi (Opsiyonel / Serbest metin) -->
+            <div id="custom-branch-container" class="space-y-1.5">
+              <label for="opt-custom-branch" class="text-xs font-bold text-slate-700">Özel Branch Adı (Opsiyonel):</label>
+              <input type="text" id="opt-custom-branch" value="{{ initial_branch }}" oninput="onCustomBranchInput()" placeholder="Örn: main, release-v2, staging" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            </div>
+          </div>
+        {% else %}
+          <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm flex items-center justify-between">
+            <span>Henüz oluşturulmuş bir projeniz yok. Widget'ı kullanmak için önce bir proje ekleyin.</span>
+            <a href="/dashboard/projects/new" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition">
+              + Yeni Proje Ekle
+            </a>
+          </div>
+        {% endif %}
+      {% else %}
+        <!-- Oturum açmamış kullanıcılar için manuel branch / demo ayarı -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="text-xs font-bold text-slate-700">Demo Önizleme Projesi</div>
+            <p class="text-xs text-slate-500">Şu anda sistemdeki demo sürüm verilerini görüntülüyorsunuz. Aşağıdan istediğiniz branch filtresini deneyebilirsiniz.</p>
+          </div>
+          <div class="space-y-1.5">
+            <label for="opt-custom-branch" class="text-xs font-bold text-slate-700">Hedef Branch Filtresi (data-branch):</label>
+            <input type="text" id="opt-custom-branch" value="{{ initial_branch }}" oninput="updateGenerator()" placeholder="Örn: main, beta, canary (Boş = tümü)" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            <span class="text-[11px] text-slate-400">Belirli bir daldaki commit'leri filtrelemek için dal adını yazın.</span>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Proje Widget Anahtarı Girişi (Manuel veya otomatik) -->
+      <div class="space-y-1.5 pt-3 border-t border-slate-100">
+        <div class="flex items-center justify-between">
+          <label for="opt-widget-key" class="text-xs font-bold text-slate-700">Proje Widget Anahtarınız (data-key veya çoklu data-keys):</label>
+          <span class="text-[11px] text-slate-400">Birden çok repo için w_1, w_2 şeklinde virgülle yazabilirsiniz</span>
+        </div>
+        <input type="text" id="opt-widget-key" value="{{ snippet_key }}" oninput="onWidgetKeyManualInput()" placeholder="PROJE_WIDGET_ANAHTARINIZ" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      </div>
+    </section>
+
     <!-- İNTERAKTİF KOD OLUŞTURUCU (GENERATOR) -->
     <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
       <div class="border-b border-slate-100 pb-4">
-        <h2 class="text-lg font-bold text-slate-900">1. Widget Formatını ve Ayarlarını Seçin</h2>
-        <p class="text-xs text-slate-500">Aşağıdaki seçenekleri değiştirdikçe hem canlı önizleme hem de alttaki HTML kodu anında güncellenir.</p>
+        <h2 class="text-lg font-bold text-slate-900">2. Widget Formatını ve Tasarımını Özelleştirin</h2>
+        <p class="text-xs text-slate-500">Aşağıdaki seçenekleri değiştirdikçe hem canlı önizleme hem de HTML kodu anında güncellenir.</p>
       </div>
 
       <!-- Ayarlar Kontrol Paneli -->
@@ -151,15 +242,6 @@
         </label>
       </div>
 
-      <!-- Proje Widget Anahtarı Girişi -->
-      <div class="space-y-1.5 pt-3 border-t border-slate-100">
-        <div class="flex items-center justify-between">
-          <label for="opt-widget-key" class="text-xs font-bold text-slate-700">Proje Widget Anahtarınız (Tek veya virgülle çoklu anahtar: data-key / data-keys):</label>
-          <span class="text-[11px] text-slate-400">Çoklu proje için w_1, w_2 şeklinde virgülle yazabilirsiniz</span>
-        </div>
-        <input type="text" id="opt-widget-key" value="{{ snippet_key }}" oninput="updateGenerator()" placeholder="PROJE_WIDGET_ANAHTARINIZ" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-      </div>
-
       <!-- Kod Çıktı Alanı & Kopyalama Butonu -->
       <div class="space-y-2 pt-2">
         <div class="flex items-center justify-between">
@@ -178,8 +260,11 @@
     <section class="space-y-6">
       <div class="flex items-center justify-between border-b border-slate-300 pb-3">
         <div>
-          <h2 class="text-lg font-bold text-slate-900">2. Canlı Görsel Önizleme</h2>
-          <p class="text-xs text-slate-500">Aşağıda seçtiğiniz ayarlara göre oluşturulan gerçek canlı widget gösterilmektedir.</p>
+          <h2 class="text-lg font-bold text-slate-900">3. Canlı Görsel Önizleme</h2>
+          <p class="text-xs text-slate-500">Aşağıda seçtiğiniz proje, branch ve tasarım ayarlarına göre oluşturulan gerçek canlı widget gösterilmektedir.</p>
+        </div>
+        <div id="preview-active-branch-pill" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">
+          Tüm Dallar
         </div>
       </div>
 
@@ -194,7 +279,7 @@
     <!-- HAZIR FORMATLAR VİTRİNİ -->
     <section class="space-y-6 pt-4">
       <div class="border-b border-slate-300 pb-3">
-        <h2 class="text-lg font-bold text-slate-900">3. Popüler Hazır Formatlar</h2>
+        <h2 class="text-lg font-bold text-slate-900">4. Popüler Hazır Formatlar</h2>
         <p class="text-xs text-slate-500">Doğrudan kullanabileceğiniz örnek şablonlar:</p>
       </div>
 
@@ -245,7 +330,9 @@
 
   <script>
     const APP_URL = "{{ app_url | safe }}";
-    const PREVIEW_KEY = "{{ preview_key | safe }}";
+    let CURRENT_PREVIEW_KEY = "{{ preview_key | safe }}";
+    const USER_PROJECTS = {{ user_projects_json | safe }};
+    const INITIAL_BRANCH = "{{ initial_branch | safe }}";
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -272,13 +359,135 @@
     function getSelectedWidgetKey() {
       const el = document.getElementById('opt-widget-key');
       const val = el ? el.value.trim() : '';
-      return val || 'PROJE_WIDGET_ANAHTARINIZ';
+      return val || CURRENT_PREVIEW_KEY || 'PROJE_WIDGET_ANAHTARINIZ';
     }
 
-    function generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors) {
+    function getSelectedBranch() {
+      const customBranchEl = document.getElementById('opt-custom-branch');
+      const customBranch = customBranchEl ? customBranchEl.value.trim() : '';
+      if (customBranch) return customBranch;
+
+      const selBranchEl = document.getElementById('sel-user-branch');
+      if (selBranchEl && selBranchEl.value) {
+        return selBranchEl.value.trim();
+      }
+      return '';
+    }
+
+    function populateBranchesForProject(widgetKey, selectBranch) {
+      const selBranch = document.getElementById('sel-user-branch');
+      if (!selBranch) return;
+
+      selBranch.innerHTML = '<option value="">Tüm Branch\'ler (Varsayılan)</option>';
+      const proj = USER_PROJECTS.find(p => p.widget_key === widgetKey);
+
+      if (proj && Array.isArray(proj.tracked_branches) && proj.tracked_branches.length > 0) {
+        proj.tracked_branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = `Dal: ${b}`;
+          if (selectBranch && b === selectBranch) {
+            opt.selected = true;
+          }
+          selBranch.appendChild(opt);
+        });
+      }
+    }
+
+    function onProjectSelectChange() {
+      const selProj = document.getElementById('sel-user-project');
+      if (!selProj) return;
+
+      const selectedKey = selProj.value;
+      CURRENT_PREVIEW_KEY = selectedKey;
+
+      const keyInput = document.getElementById('opt-widget-key');
+      if (keyInput) keyInput.value = selectedKey;
+
+      // Header'daki aktif anahtar rozetini güncelle
+      const headerKeyEl = document.querySelector('header code');
+      if (headerKeyEl) headerKeyEl.textContent = selectedKey;
+
+      // Projeye ait branch listesini doldur
+      populateBranchesForProject(selectedKey, '');
+
+      // Özel branch kutusunu temizle
+      const customBranchEl = document.getElementById('opt-custom-branch');
+      if (customBranchEl) customBranchEl.value = '';
+
+      // Projeye ait özel renk varsa ve tema custom ise öneri ver
+      const proj = USER_PROJECTS.find(p => p.widget_key === selectedKey);
+      if (proj && proj.brand_color) {
+        const accentInput = document.getElementById('opt-custom-accent');
+        if (accentInput) accentInput.value = proj.brand_color;
+      }
+
+      updateGenerator();
+    }
+
+    function onBranchSelectChange() {
+      const selBranch = document.getElementById('sel-user-branch');
+      const customBranchEl = document.getElementById('opt-custom-branch');
+      if (selBranch && customBranchEl) {
+        customBranchEl.value = selBranch.value;
+      }
+      updateGenerator();
+    }
+
+    function onCustomBranchInput() {
+      const customBranchEl = document.getElementById('opt-custom-branch');
+      const val = customBranchEl ? customBranchEl.value.trim() : '';
+      const selBranch = document.getElementById('sel-user-branch');
+      if (selBranch) {
+        let matched = false;
+        for (let i = 0; i < selBranch.options.length; i++) {
+          if (selBranch.options[i].value === val) {
+            selBranch.selectedIndex = i;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && val !== '') {
+          selBranch.value = '';
+        }
+      }
+      updateGenerator();
+    }
+
+    function onWidgetKeyManualInput() {
       const key = getSelectedWidgetKey();
+      CURRENT_PREVIEW_KEY = key;
+
+      const headerKeyEl = document.querySelector('header code');
+      if (headerKeyEl) headerKeyEl.textContent = key;
+
+      const selProj = document.getElementById('sel-user-project');
+      if (selProj) {
+        let found = false;
+        for (let i = 0; i < selProj.options.length; i++) {
+          if (selProj.options[i].value === key) {
+            selProj.selectedIndex = i;
+            found = true;
+            populateBranchesForProject(key, getSelectedBranch());
+            break;
+          }
+        }
+        if (!found) {
+          // Projeler arasında yok (manuel dışarıdan girilmiş bir anahtar)
+          const selBranch = document.getElementById('sel-user-branch');
+          if (selBranch) selBranch.innerHTML = '<option value="">Tüm Branch\'ler (Varsayılan)</option>';
+        }
+      }
+      updateGenerator();
+    }
+
+    function generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors, branch) {
+      const key = getSelectedWidgetKey();
+      const currentBranch = branch !== undefined ? branch : getSelectedBranch();
+
       if (layout === 'badge') {
         let badgeAttrs = [`src="${APP_URL}/widget.js"`, `data-key="${key}"`];
+        if (currentBranch) badgeAttrs.push(`data-branch="${currentBranch}"`);
         if (theme && theme !== 'auto') badgeAttrs.push(`data-theme="${theme}"`);
         badgeAttrs.push('async');
         return `<!-- Commit Günlüğü Sağ Alt Bildirim Rozeti -->\n<script ${badgeAttrs.join(' ')}><\/script>`;
@@ -289,6 +498,10 @@
         attrs.push(`data-keys="${key}"`);
       } else {
         attrs.push(`data-key="${key}"`);
+      }
+
+      if (currentBranch) {
+        attrs.push(`data-branch="${currentBranch}"`);
       }
 
       attrs.push(`data-layout="${layout}"`);
@@ -325,6 +538,7 @@
       const showDate = document.getElementById('opt-show-date').checked;
       const showPill = document.getElementById('opt-show-pill').checked;
       const distinct = document.getElementById('opt-distinct').checked;
+      const branch = getSelectedBranch();
 
       const customColors = {
         bg: document.getElementById('opt-custom-bg').value.trim(),
@@ -333,8 +547,20 @@
         border: document.getElementById('opt-custom-border').value.trim()
       };
 
-      const snippet = generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors);
+      const snippet = generateSnippet(layout, limit, width, theme, mode, showDesc, showDate, showPill, distinct, customColors, branch);
       document.getElementById('code-output').textContent = snippet;
+
+      // Canlı Önizleme Üzerindeki Branch Bilgi Rozetini Güncelle
+      const branchPill = document.getElementById('preview-active-branch-pill');
+      if (branchPill) {
+        if (branch) {
+          branchPill.textContent = `Hedef Dal: ${branch}`;
+          branchPill.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200';
+        } else {
+          branchPill.textContent = 'Tüm Dallar';
+          branchPill.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700';
+        }
+      }
 
       // Canlı Önizlemeyi Güncelle
       const previewArea = document.getElementById('live-preview-container');
@@ -343,9 +569,17 @@
       if (layout === 'badge') {
         previewArea.innerHTML = `<div class="text-center p-6 text-slate-500 text-sm"><p class="font-bold text-slate-800">Sağ Alt Rozet Modu Aktif</p><p class="text-xs mt-1">Ekranın sağ alt köşesindeki yeşil "Yenilikler" butonuna tıklayarak inceleyebilirsiniz ↘</p></div>`;
       } else {
+        const key = getSelectedWidgetKey();
         const widgetEl = document.createElement('div');
         widgetEl.className = 'commit-gunlugu-widget';
-        widgetEl.setAttribute('data-key', PREVIEW_KEY);
+        if (key.includes(',')) {
+          widgetEl.setAttribute('data-keys', key);
+        } else {
+          widgetEl.setAttribute('data-key', key);
+        }
+        if (branch) {
+          widgetEl.setAttribute('data-branch', branch);
+        }
         widgetEl.setAttribute('data-layout', layout);
         widgetEl.setAttribute('data-mode', mode);
         widgetEl.setAttribute('data-limit', limit);
@@ -385,19 +619,25 @@
     }
 
     function copyPredefined(layout, limit) {
-      const snippet = generateSnippet(layout, limit, '100%', 'light', 'shadow', true, true, true, true, null);
+      const branch = getSelectedBranch();
+      const snippet = generateSnippet(layout, limit, '100%', 'light', 'shadow', true, true, true, true, null, branch);
       navigator.clipboard.writeText(snippet).then(() => {
         showToast(`${layout.toUpperCase()} widget kodu kopyalandı! ✓`);
       });
     }
 
-    // İlk açılışta kodu oluştur
+    // İlk açılışta projeleri ve branchleri hazırla
     document.addEventListener('DOMContentLoaded', () => {
+      const selProj = document.getElementById('sel-user-project');
+      const initialKey = selProj ? selProj.value : CURRENT_PREVIEW_KEY;
+      if (initialKey) {
+        populateBranchesForProject(initialKey, INITIAL_BRANCH);
+      }
       onThemeChange();
     });
   </script>
 
   <!-- Widget Çalıştırıcı Betik (Doğrudan dinamik no-cache /widget.js rotası) -->
-  <script src="/widget.js" data-key="{{ preview_key | safe }}" data-mode="badge"></script>
+  <script src="/widget.js" data-key="{{ preview_key | safe }}" {% if initial_branch %}data-branch="{{ initial_branch }}"{% endif %} data-mode="badge"></script>
 </body>
 </html>

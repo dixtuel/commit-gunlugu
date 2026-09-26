@@ -24,11 +24,17 @@ pub async fn health_check() -> impl IntoResponse {
     }))
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct WidgetQuery {
+    pub branch: Option<String>,
+}
+
 /// Gömülebilir JavaScript widget'ının tükettiği herkese açık JSON uç noktası.
 /// CORS izinleri açıktır, rate limit ve gizlilik korumalıdır.
 pub async fn get_widget_data(
     State(state): State<AppState>,
     Path(widget_key): Path<String>,
+    Query(query): Query<WidgetQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let project = if widget_key == "demo" || widget_key == "w_demo" {
         let p = if let Some(ref demo_key) = state.config.demo_widget_key {
@@ -50,11 +56,17 @@ pub async fn get_widget_data(
             .ok_or_else(|| AppError::NotFound("Geçersiz widget anahtarı".to_string()))?
     };
 
+    let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+        vec![b.to_string()]
+    } else {
+        project.tracked_branches()
+    };
+
     let entries = crate::db::list_entries_for_project_branches(
         &state.db,
         &project.id,
         true,
-        &project.tracked_branches(),
+        &filter_branches,
         state.config.token_encryption_key.as_deref(),
     )
     .await?;
@@ -101,6 +113,7 @@ pub struct MultiWidgetQuery {
     pub keys: Option<String>,
     pub limit: Option<usize>,
     pub distinct: Option<bool>,
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,11 +180,16 @@ pub async fn get_multi_widget_data(
     let mut per_project_newest: Vec<MultiWidgetEntry> = Vec::new();
 
     for p in &resolved_projects {
+        let filter_branches = if let Some(ref b) = query.branch.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
+            vec![b.to_string()]
+        } else {
+            p.tracked_branches()
+        };
         let entries = crate::db::list_entries_for_project_branches(
             &state.db,
             &p.id,
             true,
-            &p.tracked_branches(),
+            &filter_branches,
             state.config.token_encryption_key.as_deref(),
         )
         .await?;
