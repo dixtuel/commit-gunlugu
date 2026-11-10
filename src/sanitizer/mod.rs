@@ -47,7 +47,7 @@ pub fn sanitize_author(author: Option<&str>, username: Option<&str>) -> String {
 
 /// KVKK ve GDPR uyumlu e-posta maskeleme.
 /// Kişisel tanımlayıcı bilgileri (PII) gizler, yalnızca doğrulama için ilk ve son karakteri bırakır.
-/// Örn: asrinklcc@sely.tr -> a***c@sely.tr
+/// Örn: dixtuel@gmail.com -> a***c@sely.tr
 pub fn mask_email(email: &str) -> String {
     let trimmed = email.trim();
     let parts: Vec<&str> = trimmed.split('@').collect();
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_mask_email() {
-        assert_eq!(mask_email("asrinklcc@sely.tr"), "a***c@sely.tr");
+        assert_eq!(mask_email("dixtuel@gmail.com"), "a***c@sely.tr");
         assert_eq!(mask_email("user@example.com"), "u***r@example.com");
         assert_eq!(mask_email("a@example.com"), "a***@example.com");
         assert_eq!(mask_email("ab@example.com"), "a***b@example.com");
